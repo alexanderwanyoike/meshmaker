@@ -4,13 +4,13 @@ on:
   push:
     branches: [main]
     paths:
-      - 'cloud/**'
+      - 'containers/hymotion/**'
       - '.github/workflows/build-push.yml'
   workflow_dispatch:  # Allow manual trigger
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/hy-motion
+  IMAGE_NAME: ${{ github.repository }}/hymotion
 
 jobs:
   build-and-push:
@@ -58,7 +58,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./cloud
+          context: ./containers/hymotion
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
