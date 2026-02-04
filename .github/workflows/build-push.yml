@@ -4,13 +4,13 @@ on:
   push:
     branches: [main]
     paths:
-      - 'cloud/**'
+      - 'containers/hymotion/**'
       - '.github/workflows/build-push.yml'
   workflow_dispatch:  # Allow manual trigger
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/hy-motion
+  IMAGE_NAME: ${{ github.repository }}/hymotion
 
 jobs:
   build-and-push:
@@ -58,7 +58,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./cloud
+          context: ./containers/hymotion
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -75,5 +75,5 @@ jobs:
           echo "1. Go to [RunPod Serverless Console](https://www.runpod.io/console/serverless)" >> $GITHUB_STEP_SUMMARY
           echo "2. Create new endpoint" >> $GITHUB_STEP_SUMMARY
           echo "3. Use image: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`" >> $GITHUB_STEP_SUMMARY
-          echo "4. Select A100 40GB GPU" >> $GITHUB_STEP_SUMMARY
+          echo "4. Select 48GB GPU (A100 or A6000)" >> $GITHUB_STEP_SUMMARY
           echo "5. Set worker type to Flex (scale to zero)" >> $GITHUB_STEP_SUMMARY

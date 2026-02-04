@@ -37,6 +37,17 @@ RUN pip install --no-cache-dir \
 # Install RunPod SDK
 RUN pip install --no-cache-dir runpod>=1.6.0
 
+# Install fbxsdkpy for FBX retargeting
+RUN pip install --no-cache-dir \
+    --extra-index-url https://gitlab.inria.fr/api/v4/projects/18692/packages/pypi/simple \
+    fbxsdkpy
+
+# Install libxml2 for FBX SDK
+RUN apt-get update && apt-get install -y libxml2 && rm -rf /var/lib/apt/lists/*
+
+# Copy retargeting module
+COPY retargeting/ /app/retargeting/
+
 # Copy our custom handler
 COPY handler.py /app/handler.py
 
