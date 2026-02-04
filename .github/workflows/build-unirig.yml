@@ -1,17 +1,17 @@
-name: Build HY-Motion
+name: Build UniRig
 
 on:
   push:
     branches: [main]
     paths:
-      - 'containers/hymotion/**'
+      - 'containers/unirig/**'
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
 
 jobs:
-  build-hymotion:
+  build-unirig:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -47,7 +47,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/hymotion
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/unirig
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=,format=short
@@ -55,7 +55,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./containers/hymotion
+          context: ./containers/unirig
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -64,6 +64,6 @@ jobs:
 
       - name: Output image URL
         run: |
-          echo "## HY-Motion Docker Image Published" >> $GITHUB_STEP_SUMMARY
+          echo "## UniRig Docker Image Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Image: \`${{ env.REGISTRY }}/${{ github.repository }}/hymotion:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "Image: \`${{ env.REGISTRY }}/${{ github.repository }}/unirig:latest\`" >> $GITHUB_STEP_SUMMARY
