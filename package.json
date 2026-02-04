@@ -1,0 +1,9 @@
+{
+  "name": "charmaker",
+  "private": true,
+  "workspaces": ["app", "shared/*"],
+  "scripts": {
+    "app:dev": "yarn workspace app tauri dev",
+    "app:build": "yarn workspace app tauri build"
+  }
+}
