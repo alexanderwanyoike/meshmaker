@@ -1,7 +1,7 @@
 const RUNPOD_BASE = 'https://api.runpod.io/v2';
 
 const POLL_INTERVAL_MS = 3000;
-const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
 export type JobStatus = 'IN_QUEUE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'TIMED_OUT';
 
@@ -36,8 +36,10 @@ async function pollJob(
   endpointId: string,
   jobId: string,
   onStatus: (status: JobStatus) => void,
+  timeoutMs: number,
 ): Promise<unknown> {
-  const deadline = Date.now() + TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
+  const timeoutMins = Math.round(timeoutMs / 60000);
 
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
@@ -62,7 +64,7 @@ async function pollJob(
     }
   }
 
-  throw new Error('RunPod job timed out after 10 minutes');
+  throw new Error(`RunPod job timed out after ${timeoutMins} minutes`);
 }
 
 export async function runJob(
@@ -70,7 +72,8 @@ export async function runJob(
   endpointId: string,
   input: object,
   onStatus: (status: JobStatus) => void,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<unknown> {
   const jobId = await submitJob(apiKey, endpointId, input);
-  return pollJob(apiKey, endpointId, jobId, onStatus);
+  return pollJob(apiKey, endpointId, jobId, onStatus, timeoutMs);
 }

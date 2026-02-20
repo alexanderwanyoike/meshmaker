@@ -2,7 +2,7 @@ name: Build HY-Motion
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'containers/hymotion/**'
   workflow_dispatch:

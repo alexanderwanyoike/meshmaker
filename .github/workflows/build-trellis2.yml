@@ -2,7 +2,7 @@ name: Build Trellis2 Container
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'containers/trellis2/**'
       - '.github/workflows/build-trellis2.yml'
