@@ -14,6 +14,22 @@ export function useFilePicker() {
     return result as string | null;
   };
 
+  const pickGlb = async (): Promise<string | null> => {
+    const result = await open({
+      multiple: false,
+      filters: [{ name: '3D Mesh', extensions: ['glb'] }],
+    });
+    return result as string | null;
+  };
+
+  const pickFbx = async (): Promise<string | null> => {
+    const result = await open({
+      multiple: false,
+      filters: [{ name: '3D Model', extensions: ['fbx'] }],
+    });
+    return result as string | null;
+  };
+
   const pickSaveLocation = async (defaultName: string): Promise<string | null> => {
     const result = await save({
       defaultPath: defaultName,
@@ -27,5 +43,5 @@ export function useFilePicker() {
     return result;
   };
 
-  return { pickImage, pickSaveLocation };
+  return { pickImage, pickGlb, pickFbx, pickSaveLocation };
 }
