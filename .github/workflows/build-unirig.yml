@@ -2,7 +2,7 @@ name: Build UniRig
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'containers/unirig/**'
   workflow_dispatch:
