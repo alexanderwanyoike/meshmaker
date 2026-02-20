@@ -1,11 +1,7 @@
-import { Wizard } from "./components/wizard/Wizard";
+import { AppShell } from "./components/AppShell";
 
 function App() {
-  return (
-    <main className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8">
-      <Wizard />
-    </main>
-  );
+  return <AppShell />;
 }
 
 export default App;
