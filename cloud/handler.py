@@ -2,7 +2,6 @@
 RunPod Serverless Handler for HY-Motion-1.0
 
 Generates SMPL-H motion data from text prompts using the official HY-Motion inference code.
-Supports optional retargeting to Mixamo-rigged FBX characters.
 """
 
 import os
@@ -14,8 +13,6 @@ from typing import Any
 
 import numpy as np
 import runpod
-
-from retargeting import retarget_motion_to_fbx
 
 # Add HY-Motion to path
 HY_MOTION_DIR = "/app/hy-motion"
@@ -299,9 +296,6 @@ def handler(job: dict) -> dict:
     if not prompt:
         return {"error": "Missing required field: prompt"}
 
-    # Check for optional character FBX for retargeting
-    character_fbx_b64 = job_input.get("character_fbx")
-
     params = {
         "prompt": prompt,
         "duration": job_input.get("duration", 4.0),
@@ -313,35 +307,6 @@ def handler(job: dict) -> dict:
 
     try:
         result = generate_motion(**params)
-
-        # If character FBX provided, retarget motion to it
-        if character_fbx_b64:
-            try:
-                # Decode base64 FBX
-                fbx_bytes = base64.b64decode(character_fbx_b64)
-            except Exception as e:
-                return {"error": f"Invalid base64 in character_fbx: {e}"}
-
-            try:
-                # Retarget motion to the character
-                animated_fbx = retarget_motion_to_fbx(
-                    motion_data=result["motion_data"],
-                    input_fbx_bytes=fbx_bytes,
-                )
-                return {
-                    "animated_fbx": base64.b64encode(animated_fbx).decode("utf-8"),
-                    "metadata": result["metadata"],
-                }
-            except ValueError as e:
-                return {"error": str(e)}
-            except Exception as e:
-                import traceback
-                return {
-                    "error": f"Retargeting failed: {e}",
-                    "traceback": traceback.format_exc(),
-                }
-
-        # No character FBX - return NPZ format (backward compatible)
         result["motion_data"] = encode_numpy_arrays(result["motion_data"])
         return result
 

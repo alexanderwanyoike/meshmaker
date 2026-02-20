@@ -26,10 +26,9 @@ Thumbs.db
 # Output files
 *.fbx
 *.npz
+*.npy
 output/
-
-# Keep stats files for container builds
-!containers/hymotion/stats/*.npy
 
 # Claude
 .claude/
+.notes/

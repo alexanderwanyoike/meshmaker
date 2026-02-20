@@ -1,77 +1,219 @@
-# CharMaker
+# HY-Motion Cloud Pipeline
 
-End-to-end AI pipeline for creating animated game characters from text or images.
+Generate AI motion animations from text prompts using [HY-Motion-1.0](https://github.com/Tencent-Hunyuan/HY-Motion-1.0) on RunPod serverless, with local FBX export and Mixamo retargeting.
 
-```
-Text/Image → 3D Model → Rigged Character → Animated Character → Game-Ready
-    ↓            ↓              ↓                  ↓                 ↓
- Prompt     Trellis 2       UniRig           HY-Motion           FBX/GLB
-            Hunyuan 3D       (GLB→FBX)        (text→motion)
-```
-
-## Project Status
-
-**Active development.** Currently restructuring from a single-purpose motion generator into a full character pipeline.
-
-See `.notes/` for detailed planning documents:
-- `charmaker-vision.md` - Full vision and architecture
-- `card-*.md` - Implementation cards for each phase
-
-## Repository Structure
+## Architecture
 
 ```
-charmaker/
-├── app/                    # Tauri desktop app (planned)
-├── containers/
-│   └── hymotion/           # Text-to-animation container (working)
-│       ├── Dockerfile
-│       ├── handler.py
-│       └── stats/
-├── shared/                 # Shared utilities (planned)
-└── .notes/                 # Planning documents
+┌────────────────────────┐     ┌──────────────────────────────┐
+│  Your Machine (Local)  │     │    RunPod Serverless (GPU)   │
+│                        │     │                              │
+│  1. Send prompt  ─────────▶  │  HY-Motion-1.0 (1B params)   │
+│                        │     │  - Text → Motion generation  │
+│  2. Receive motion ◀──────── │  - Output: SMPL-H data       │
+│     (base64 numpy)     │     │    (~100KB)                  │
+│                        │     └──────────────────────────────┘
+│  3. Local processing:  │
+│     - Retarget to      │
+│       Mixamo skeleton  │
+│     - Export to FBX    │
+│                        │
+│  4. Output: .fbx       │
+└────────────────────────┘
 ```
 
-## Current Capability: HY-Motion Container
+## Cost Estimate
 
-The `containers/hymotion/` directory contains a working RunPod serverless container for text-to-animation generation using [HY-Motion-1.0](https://github.com/Tencent-Hunyuan/HY-Motion-1.0).
+| Component | Cost |
+|-----------|------|
+| 48GB GPU (20 hrs/month) | ~$25-40/month |
+| Network Volume (20GB) | ~$2/month |
+| **Per-animation** | **~$0.15-0.20** |
 
-### Quick Start
+---
 
-1. Push to GitHub - image builds via GitHub Actions to `ghcr.io/<user>/charmaker/hymotion:latest`
-2. Make the package public in GitHub Package settings
-3. Create RunPod endpoint with 48GB GPU and network volume mounted at `/runpod-volume`
-4. Send requests with text prompts, receive SMPL-H motion data
+## Setup Guide
 
-### API
+### Step 1: Push to GitHub
+
+The Docker image builds automatically via GitHub Actions:
 
 ```bash
-curl -X POST "https://api.runpod.ai/v2/${ENDPOINT_ID}/run" \
-  -H "Authorization: Bearer ${RUNPOD_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": {
-      "prompt": "person walking forward",
-      "duration": 4.0,
-      "fps": 30
-    }
-  }'
+git clone https://github.com/YOUR_USERNAME/motion-creator.git
+cd motion-creator
+git push origin main
 ```
 
-## Roadmap
+Image will be at: `ghcr.io/YOUR_USERNAME/motion-creator/hy-motion:latest`
 
-| Card | Component | Status |
-|------|-----------|--------|
-| 0 | Repo restructure | In Progress |
-| 1 | Trellis 2 / Hunyuan 3D container | Planned |
-| 2 | UniRig container | Planned |
-| 3 | HY-Motion update (retargeting) | Planned |
-| 4 | Tauri app scaffold | Planned |
-| 5 | Pipeline integration | Planned |
-| 6 | Testing & docs | Planned |
+**Make the package public** (required for RunPod to pull it):
+1. Go to github.com → Your Profile → Packages
+2. Click `motion-creator/hy-motion`
+3. Package Settings → Change visibility → **Public**
+
+### Step 2: Create RunPod Account & Add Credits
+
+1. Sign up at [runpod.io](https://www.runpod.io)
+2. Go to [Billing](https://www.runpod.io/console/user/billing) → Add $10-25 credits
+
+### Step 3: Get Your API Key
+
+1. Go to [Settings → API Keys](https://www.runpod.io/console/user/settings)
+2. Click **Create API Key**
+3. Save it somewhere safe
+
+```bash
+export RUNPOD_API_KEY="rp_xxxxxxxxxxxxxxxx"
+```
+
+### Step 4: Create Network Volume
+
+The model weights (~8GB) are stored here and persist between cold starts:
+
+1. Go to [Storage → Network Volumes](https://www.runpod.io/console/user/storage)
+2. Click **+ New Network Volume**
+3. Configure:
+   - **Name:** `hy-motion-models`
+   - **Region:** Pick one with good GPU availability (check Step 5 first)
+   - **Size:** 20 GB
+4. **Remember the region** - your endpoint must be in the same region
+
+### Step 5: Create Serverless Endpoint
+
+1. Go to [Serverless → Endpoints](https://www.runpod.io/console/serverless)
+2. Click **+ New Endpoint**
+3. Scroll down to **Container Image** and enter:
+   ```
+   ghcr.io/YOUR_USERNAME/motion-creator/hy-motion:latest
+   ```
+4. Select **48 GB GPU** (HY-Motion needs ~26GB VRAM)
+5. Configure workers:
+   - **Max Workers:** 1
+   - **Idle Timeout:** 5 seconds
+   - **Execution Timeout:** 600 seconds
+6. Under **Advanced** → **Network Volume**:
+   - Select your `hy-motion-models` volume
+   - Mount path: `/runpod-volume`
+7. Click **Create**
+8. Copy your **Endpoint ID**
+
+```bash
+export RUNPOD_ENDPOINT_ID="your-endpoint-id"
+```
+
+### Step 6: First Run (Downloads Model)
+
+The first request downloads the model to your network volume (~5-10 min):
+
+```bash
+cd local
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+export RUNPOD_API_KEY="your-key"
+export RUNPOD_ENDPOINT_ID="your-endpoint-id"
+
+# First run - will download model
+python client.py -p "person walking forward" -o walk.npz
+```
+
+Watch the logs in RunPod dashboard to see download progress.
+
+### Step 7: Generate Animations
+
+After the model is cached, generation is fast (~30-60s cold start, ~5-10s generation):
+
+```bash
+# Basic usage
+python client.py -p "character doing a backflip" -o backflip.npz
+
+# With options
+python client.py \
+  -p "person running and then jumping" \
+  -o run_jump.npz \
+  --duration 5.0 \
+  --fps 30 \
+  --seed 42
+```
+
+---
+
+## CLI Reference
+
+```
+Usage: client.py [OPTIONS]
+
+Options:
+  -p, --prompt TEXT          Motion description (required)
+  -o, --output PATH          Output file (.fbx or .npz) (required)
+  --duration FLOAT           Duration in seconds (default: 4.0)
+  --fps INTEGER              Frames per second (default: 30)
+  -g, --guidance-scale FLOAT CFG scale (default: 7.5)
+  -s, --steps INTEGER        Diffusion steps (default: 50)
+  --seed INTEGER             Random seed for reproducibility
+  --save-raw                 Also save raw motion data
+  --help                     Show this message
+```
+
+---
+
+## File Structure
+
+```
+motion-creator/
+├── .github/workflows/
+│   └── build-push.yml      # CI/CD: builds & pushes to ghcr.io
+├── cloud/
+│   ├── Dockerfile          # Clones HY-Motion, installs deps
+│   └── handler.py          # RunPod serverless handler
+├── local/
+│   ├── client.py           # CLI tool
+│   ├── retarget.py         # SMPL-H → Mixamo conversion
+│   ├── export_fbx.py       # FBX export (requires FBX SDK)
+│   └── requirements.txt
+└── README.md
+```
+
+---
+
+## Troubleshooting
+
+### "Model pre-loading failed"
+Normal on first run. The model downloads from HuggingFace to your network volume (~5-10 min). Check RunPod logs.
+
+### "No module named 'hymotion'"
+The Docker image didn't build correctly. Check GitHub Actions logs.
+
+### Job times out
+- First run can take 10+ minutes (model download)
+- Increase execution timeout in endpoint settings
+
+### Wrong region for network volume
+Network volumes are region-locked. Delete and recreate in a region with 48GB GPU availability.
+
+### GPU not available
+48GB GPUs can have limited availability. Try:
+- Different region
+- Wait and retry
+- Use 80GB GPU (more expensive but more available)
+
+---
+
+## FBX Export (Optional)
+
+To export `.fbx` files, install Autodesk FBX SDK:
+
+1. Download from [Autodesk](https://www.autodesk.com/developer-network/platform-technologies/fbx-sdk-2020-3)
+2. Install Python bindings
+3. Then use: `python client.py -p "walking" -o walk.fbx`
+
+Without FBX SDK, use `.npz` format and convert in Blender.
+
+---
 
 ## Links
 
-- [HY-Motion-1.0](https://github.com/Tencent-Hunyuan/HY-Motion-1.0) - Text-to-motion model
-- [Trellis 2](https://github.com/microsoft/TRELLIS.2) - Image/text to 3D (planned)
-- [UniRig](https://github.com/VAST-AI-Research/UniRig) - Auto-rigging (planned)
-- [RunPod Serverless](https://docs.runpod.io/serverless) - GPU infrastructure
+- [HY-Motion-1.0 GitHub](https://github.com/Tencent-Hunyuan/HY-Motion-1.0)
+- [HY-Motion HuggingFace](https://huggingface.co/tencent/HY-Motion-1.0)
+- [RunPod Serverless Docs](https://docs.runpod.io/serverless)
