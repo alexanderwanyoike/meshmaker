@@ -40,7 +40,7 @@ export function Wizard({ hideHeader }: WizardProps) {
             title="Configure RunPod API"
             className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors text-xl"
           >
-            Settings
+            ⚙️
           </button>
         </div>
       )}
@@ -48,7 +48,7 @@ export function Wizard({ hideHeader }: WizardProps) {
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
         {renderStep()}
       </div>
-      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
+      {!hideHeader && showSettings && <Settings onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
