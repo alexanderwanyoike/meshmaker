@@ -5,30 +5,39 @@ export interface ModelMetadata {
   bones?: number;
   fps?: number;
   duration?: number;
+  seed?: number;
+  generationTime?: number;
 }
 
 export interface GeneratedModel {
   id: string;
-  format: 'glb' | 'fbx';
-  path: string;
+  format: 'glb';
+  data: string; // base64-encoded GLB
   metadata: ModelMetadata;
 }
 
 export interface RiggedModel {
   id: string;
-  format: 'glb' | 'fbx';
-  path: string;
+  format: 'fbx';
+  data: string; // base64-encoded FBX
   metadata: ModelMetadata;
 }
 
 export interface AnimatedModel {
   id: string;
-  format: 'glb' | 'fbx';
-  path: string;
+  format: 'fbx';
+  data: string; // base64-encoded animated FBX
   metadata: ModelMetadata;
 }
 
 export type ExportFormat = 'fbx' | 'glb';
+
+export interface RunPodConfig {
+  apiKey: string;
+  trellisEndpointId: string;
+  unirirEndpointId: string;
+  hymotionEndpointId: string;
+}
 
 export interface PipelineState {
   currentStep: number;
@@ -42,6 +51,8 @@ export interface PipelineState {
   exportFormat: ExportFormat;
   exportPath: string | null;
   isProcessing: boolean;
+  error: string | null;
+  statusMessage: string | null;
 }
 
 export interface PipelineActions {
@@ -58,5 +69,7 @@ export interface PipelineActions {
   setExportFormat: (format: ExportFormat) => void;
   setExportPath: (path: string | null) => void;
   setIsProcessing: (processing: boolean) => void;
+  setError: (error: string | null) => void;
+  setStatusMessage: (message: string | null) => void;
   reset: () => void;
 }

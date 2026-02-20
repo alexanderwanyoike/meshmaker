@@ -17,9 +17,11 @@ const initialState: PipelineState = {
   animatedModel: null,
   animationPrompt: '',
   animationDuration: 3,
-  exportFormat: 'glb',
+  exportFormat: 'fbx',
   exportPath: null,
   isProcessing: false,
+  error: null,
+  statusMessage: null,
 };
 
 export const usePipelineStore = create<PipelineState & PipelineActions>((set) => ({
@@ -41,54 +43,40 @@ export const usePipelineStore = create<PipelineState & PipelineActions>((set) =>
     })),
 
   setInputImage: (path: string | null) =>
-    set(() => ({
-      inputImage: path,
-    })),
+    set(() => ({ inputImage: path, error: null })),
 
   setInputPrompt: (prompt: string) =>
-    set(() => ({
-      inputPrompt: prompt,
-    })),
+    set(() => ({ inputPrompt: prompt })),
 
   setGeneratedModel: (model: GeneratedModel | null) =>
-    set(() => ({
-      generatedModel: model,
-    })),
+    set(() => ({ generatedModel: model })),
 
   setRiggedModel: (model: RiggedModel | null) =>
-    set(() => ({
-      riggedModel: model,
-    })),
+    set(() => ({ riggedModel: model })),
 
   setAnimatedModel: (model: AnimatedModel | null) =>
-    set(() => ({
-      animatedModel: model,
-    })),
+    set(() => ({ animatedModel: model })),
 
   setAnimationPrompt: (prompt: string) =>
-    set(() => ({
-      animationPrompt: prompt,
-    })),
+    set(() => ({ animationPrompt: prompt })),
 
   setAnimationDuration: (duration: number) =>
-    set(() => ({
-      animationDuration: duration,
-    })),
+    set(() => ({ animationDuration: duration })),
 
   setExportFormat: (format: ExportFormat) =>
-    set(() => ({
-      exportFormat: format,
-    })),
+    set(() => ({ exportFormat: format })),
 
   setExportPath: (path: string | null) =>
-    set(() => ({
-      exportPath: path,
-    })),
+    set(() => ({ exportPath: path })),
 
   setIsProcessing: (processing: boolean) =>
-    set(() => ({
-      isProcessing: processing,
-    })),
+    set(() => ({ isProcessing: processing })),
+
+  setError: (error: string | null) =>
+    set(() => ({ error })),
+
+  setStatusMessage: (message: string | null) =>
+    set(() => ({ statusMessage: message })),
 
   reset: () => set(() => initialState),
 }));
