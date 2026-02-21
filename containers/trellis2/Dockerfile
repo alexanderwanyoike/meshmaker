@@ -38,6 +38,10 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir \
     git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
 
+# Target GPU architectures for CUDA extension builds (no GPU available in CI)
+# 8.0=A100, 8.6=A6000/RTX3090, 8.9=RTX4090/L40, 9.0=H100
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0+PTX"
+
 # Build CUDA extensions
 RUN pip install --no-cache-dir flash-attn --no-build-isolation
 
