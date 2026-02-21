@@ -48,13 +48,13 @@ RUN pip install --no-cache-dir flash-attn --no-build-isolation
 RUN git clone --depth 1 --branch v0.4.0 https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast && \
     pip install --no-cache-dir --no-build-isolation /tmp/nvdiffrast && rm -rf /tmp/nvdiffrast
 
-RUN git clone --depth 1 https://github.com/JeffreyXiang/nvdiffrec.git /tmp/nvdiffrec && \
+RUN git clone --depth 1 --branch renderutils https://github.com/JeffreyXiang/nvdiffrec.git /tmp/nvdiffrec && \
     pip install --no-cache-dir --no-build-isolation /tmp/nvdiffrec && rm -rf /tmp/nvdiffrec
 
-RUN git clone --depth 1 https://github.com/JeffreyXiang/CuMesh.git /tmp/cumesh && \
+RUN git clone --depth 1 --recursive https://github.com/JeffreyXiang/CuMesh.git /tmp/cumesh && \
     pip install --no-cache-dir --no-build-isolation /tmp/cumesh && rm -rf /tmp/cumesh
 
-RUN git clone --depth 1 https://github.com/JeffreyXiang/FlexGEMM.git /tmp/flexgemm && \
+RUN git clone --depth 1 --recursive https://github.com/JeffreyXiang/FlexGEMM.git /tmp/flexgemm && \
     pip install --no-cache-dir --no-build-isolation /tmp/flexgemm && rm -rf /tmp/flexgemm
 
 RUN pip install --no-cache-dir --no-build-isolation /app/trellis2/o-voxel
