@@ -58,7 +58,9 @@ RUN git clone --depth 1 --recursive https://github.com/JeffreyXiang/FlexGEMM.git
     pip install --no-cache-dir --no-build-isolation /tmp/flexgemm && rm -rf /tmp/flexgemm
 
 RUN pip install --no-cache-dir --no-build-isolation /app/trellis2/o-voxel
-RUN pip install --no-cache-dir -e /app/trellis2
+
+# Trellis 2 is not a pip package — add to Python path
+ENV PYTHONPATH="/app/trellis2:${PYTHONPATH}"
 
 # Install RunPod SDK
 RUN pip install --no-cache-dir runpod>=1.6.0 requests
