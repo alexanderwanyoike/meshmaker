@@ -47,7 +47,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/hymotion
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/hy-motion
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=,format=short
@@ -66,4 +66,4 @@ jobs:
         run: |
           echo "## HY-Motion Docker Image Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Image: \`${{ env.REGISTRY }}/${{ github.repository }}/hymotion:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "Image: \`${{ env.REGISTRY }}/${{ github.repository }}/hy-motion:latest\`" >> $GITHUB_STEP_SUMMARY
