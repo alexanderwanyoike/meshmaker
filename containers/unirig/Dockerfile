@@ -27,7 +27,7 @@ RUN git clone https://github.com/VAST-AI-Research/UniRig.git /app/unirig
 
 # Install UniRig requirements
 WORKDIR /app/unirig
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --ignore-installed -r requirements.txt
 
 # Install CUDA-specific packages for cu124
 # - spconv-cu124: sparse convolutions for point cloud processing

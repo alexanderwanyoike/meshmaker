@@ -11,7 +11,7 @@ ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # System dependencies
 RUN apt-get update && apt-get install -y \
-    git-lfs libjpeg-dev libgl1-mesa-glx libglib2.0-0 \
+    git-lfs libjpeg-dev libgl1-mesa-glx libglib2.0-0 zlib1g-dev \
     && rm -rf /var/lib/apt/lists/* \
     && git lfs install
 
@@ -31,7 +31,7 @@ WORKDIR /app/trellis2
 RUN pip install --no-cache-dir \
     imageio imageio-ffmpeg tqdm easydict \
     opencv-python-headless ninja trimesh \
-    transformers pillow-simd kornia timm \
+    transformers Pillow kornia timm \
     gradio==6.0.1 tensorboard pandas lpips zstandard
 
 # Install utils3d
