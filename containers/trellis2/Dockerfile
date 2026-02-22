@@ -42,8 +42,11 @@ RUN pip install --no-cache-dir \
 # 8.0=A100, 8.6=A6000/RTX3090, 8.9=RTX4090/L40, 9.0=H100
 ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0+PTX"
 
-# Build CUDA extensions (flash-attn MUST be built from source against PyTorch 2.6.0)
-RUN pip install --no-cache-dir flash-attn --no-build-isolation --no-binary flash-attn
+# Build CUDA extensions
+# flash-attn MUST be rebuilt from source against PyTorch 2.6.0
+# The base image ships flash-attn for 2.4.0 — force remove then rebuild
+RUN pip uninstall -y flash-attn 2>/dev/null; \
+    pip install --no-cache-dir --force-reinstall flash-attn --no-build-isolation
 
 RUN git clone --depth 1 --branch v0.4.0 https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast && \
     pip install --no-cache-dir --no-build-isolation /tmp/nvdiffrast && rm -rf /tmp/nvdiffrast
