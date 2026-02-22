@@ -41,10 +41,10 @@ def load_model():
     os.chdir(TRELLIS_DIR)
 
     import torch
-    from trellis2.pipelines import Trellis2ImageTo3DPipeline
+    import trellis2.pipelines
 
     # Load the pipeline - it will download weights to HF_HOME on first run
-    pipeline = Trellis2ImageTo3DPipeline.from_pretrained(MODEL_NAME)
+    pipeline = trellis2.pipelines.Trellis2ImageTo3DPipeline.from_pretrained(MODEL_NAME)
     pipeline.cuda()
 
     load_time = time.time() - start_time
