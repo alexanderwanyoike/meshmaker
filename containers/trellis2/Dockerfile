@@ -18,7 +18,8 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Upgrade PyTorch to 2.6.0 (required by Trellis 2)
-RUN pip install --no-cache-dir \
+# Must force-reinstall to fully replace base image's 2.4.0 versions
+RUN pip install --no-cache-dir --force-reinstall \
     torch==2.6.0 torchvision==0.21.0 \
     --index-url https://download.pytorch.org/whl/cu124
 
