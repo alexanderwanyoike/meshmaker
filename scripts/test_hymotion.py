@@ -18,6 +18,9 @@ import argparse
 import base64
 import io
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 import sys
 import time
 
