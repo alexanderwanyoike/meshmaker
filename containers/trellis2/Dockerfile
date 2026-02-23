@@ -1,7 +1,7 @@
 # Trellis 2 RunPod Serverless Container
 # Image-to-3D generation using Microsoft TRELLIS.2-4B
 
-FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
+FROM runpod/pytorch:1.0.3-cu1290-torch260-ubuntu2204
 
 ENV PYTHONUNBUFFERED=1
 ENV HF_HOME=/runpod-volume/huggingface
@@ -16,15 +16,6 @@ RUN apt-get update && apt-get install -y \
     && git lfs install
 
 WORKDIR /app
-
-# Upgrade PyTorch to 2.6.0 (required by Trellis 2)
-# Must fully remove base image's 2.4.0 packages first — leftover .so files
-# cause circular import errors in torchvision._meta_registrations
-RUN pip uninstall -y torch torchvision torchaudio 2>/dev/null; \
-    rm -rf /usr/local/lib/python3.11/dist-packages/torch* && \
-    pip install --no-cache-dir \
-    torch==2.6.0 torchvision==0.21.0 \
-    --index-url https://download.pytorch.org/whl/cu124
 
 # Clone Trellis 2 with submodules
 RUN git clone -b main https://github.com/microsoft/TRELLIS.2.git --recursive /app/trellis2
@@ -47,10 +38,7 @@ RUN pip install --no-cache-dir \
 ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0+PTX"
 
 # Build CUDA extensions
-# flash-attn MUST be rebuilt from source against PyTorch 2.6.0
-# The base image ships flash-attn for 2.4.0 — force remove then rebuild
-RUN pip uninstall -y flash-attn 2>/dev/null; \
-    pip install --no-cache-dir --force-reinstall flash-attn --no-build-isolation
+RUN pip install --no-cache-dir flash-attn --no-build-isolation
 
 RUN git clone --depth 1 --branch v0.4.0 https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast && \
     pip install --no-cache-dir --no-build-isolation /tmp/nvdiffrast && rm -rf /tmp/nvdiffrast
