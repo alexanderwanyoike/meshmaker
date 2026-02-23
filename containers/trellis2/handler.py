@@ -154,7 +154,7 @@ def generate_3d(
     start_time = time.time()
 
     # Run the pipeline
-    # The pipeline returns a dict with 'gaussian', 'mesh', etc.
+    # pipeline.run() returns a list of MeshWithVoxel objects
     outputs = pipeline.run(
         image,
         seed=seed,
@@ -186,19 +186,43 @@ def generate_3d(
     print("Exporting to GLB...")
     export_start = time.time()
 
-    # pipeline.run() returns a list; first element is the mesh
+    import o_voxel
+
+    # pipeline.run() returns a list of MeshWithVoxel; first element is the mesh
     mesh = outputs[0]
 
-    # Apply decimation if requested
-    if decimation_target and decimation_target > 0:
-        print(f"Decimating mesh to {decimation_target} faces...")
-        mesh = mesh.simplify(decimation_target)
+    # MeshWithVoxel has no .export() method. The correct workflow is:
+    # 1. Optionally simplify the mesh (nvdiffrast limit is 16777216)
+    # 2. Use o_voxel.postprocess.to_glb() to convert to a trimesh GLB scene
+    # 3. Call .export() on the returned trimesh object
+
+    # Apply nvdiffrast simplification limit
+    mesh.simplify(16777216)
+
+    # Apply additional decimation if requested
+    decimation = decimation_target if (decimation_target and decimation_target > 0) else 1000000
 
     # Save GLB to temporary file and read as bytes
     with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:
         tmp_path = tmp.name
 
-    mesh.export(tmp_path)
+    # Convert MeshWithVoxel to GLB via o_voxel postprocessing
+    glb = o_voxel.postprocess.to_glb(
+        vertices=mesh.vertices,
+        faces=mesh.faces,
+        attr_volume=mesh.attrs,
+        coords=mesh.coords,
+        attr_layout=mesh.layout,
+        voxel_size=mesh.voxel_size,
+        aabb=[[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]],
+        decimation_target=decimation,
+        texture_size=texture_size,
+        remesh=True,
+        remesh_band=1,
+        remesh_project=0,
+        verbose=True,
+    )
+    glb.export(tmp_path, extension_webp=True)
 
     with open(tmp_path, "rb") as f:
         glb_bytes = f.read()
