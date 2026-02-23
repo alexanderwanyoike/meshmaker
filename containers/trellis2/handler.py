@@ -160,15 +160,21 @@ def generate_3d(
         seed=seed,
         sparse_structure_sampler_params={
             "steps": 12,
-            "cfg_strength": 7.5,
+            "guidance_strength": 7.5,
+            "guidance_rescale": 0.7,
+            "rescale_t": 5.0,
         },
         shape_slat_sampler_params={
             "steps": 12,
-            "cfg_strength": 3.0,
+            "guidance_strength": 7.5,
+            "guidance_rescale": 0.5,
+            "rescale_t": 3.0,
         },
         tex_slat_sampler_params={
             "steps": 12,
-            "cfg_strength": 3.0,
+            "guidance_strength": 1.0,
+            "guidance_rescale": 0.0,
+            "rescale_t": 3.0,
         },
     )
 
