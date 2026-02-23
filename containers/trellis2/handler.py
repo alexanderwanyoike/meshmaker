@@ -162,7 +162,11 @@ def generate_3d(
             "steps": 12,
             "cfg_strength": 7.5,
         },
-        slat_sampler_params={
+        shape_slat_sampler_params={
+            "steps": 12,
+            "cfg_strength": 3.0,
+        },
+        tex_slat_sampler_params={
             "steps": 12,
             "cfg_strength": 3.0,
         },
