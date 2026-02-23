@@ -180,30 +180,25 @@ def generate_3d(
 
     generation_time = time.time() - start_time
     print(f"3D generation completed in {generation_time:.2f}s")
+    print(f"outputs type: {type(outputs)}, len: {len(outputs) if hasattr(outputs, '__len__') else 'n/a'}")
 
     # Export to GLB
     print("Exporting to GLB...")
     export_start = time.time()
 
-    # Get the Gaussian representation and extract mesh
-    gaussian = outputs["gaussian"][0]
-
-    # Extract GLB with textures
-    glb = pipeline.extract_glb(
-        gaussian,
-        texture_size=texture_size,
-    )
+    # pipeline.run() returns a list; first element is the mesh
+    mesh = outputs[0]
 
     # Apply decimation if requested
     if decimation_target and decimation_target > 0:
         print(f"Decimating mesh to {decimation_target} faces...")
-        glb = glb.simplify_mesh(decimation_target)
+        mesh = mesh.simplify(decimation_target)
 
     # Save GLB to temporary file and read as bytes
     with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:
         tmp_path = tmp.name
 
-    glb.export(tmp_path)
+    mesh.export(tmp_path)
 
     with open(tmp_path, "rb") as f:
         glb_bytes = f.read()
