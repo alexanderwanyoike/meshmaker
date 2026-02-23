@@ -54,6 +54,10 @@ RUN git clone --depth 1 --recursive https://github.com/JeffreyXiang/FlexGEMM.git
 
 RUN pip install --no-cache-dir --no-build-isolation /app/trellis2/o-voxel
 
+# Patch BiRefNet to disable meta tensors (newer transformers default breaks RMBG-2.0)
+RUN sed -i 's/trust_remote_code=True/trust_remote_code=True, low_cpu_mem_usage=False/' \
+    /app/trellis2/trellis2/pipelines/rembg/BiRefNet.py
+
 # Trellis 2 is not a pip package — add to Python path
 ENV PYTHONPATH="/app/trellis2:${PYTHONPATH}"
 
