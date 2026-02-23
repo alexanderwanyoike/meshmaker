@@ -18,8 +18,11 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Upgrade PyTorch to 2.6.0 (required by Trellis 2)
-# Must force-reinstall to fully replace base image's 2.4.0 versions
-RUN pip install --no-cache-dir --force-reinstall \
+# Must fully remove base image's 2.4.0 packages first — leftover .so files
+# cause circular import errors in torchvision._meta_registrations
+RUN pip uninstall -y torch torchvision torchaudio 2>/dev/null; \
+    rm -rf /usr/local/lib/python3.11/dist-packages/torch* && \
+    pip install --no-cache-dir \
     torch==2.6.0 torchvision==0.21.0 \
     --index-url https://download.pytorch.org/whl/cu124
 
