@@ -26,7 +26,7 @@ WORKDIR /app/trellis2
 RUN pip install --no-cache-dir \
     imageio imageio-ffmpeg tqdm easydict \
     opencv-python-headless ninja trimesh \
-    transformers Pillow kornia timm \
+    "transformers>=4.30,<5" Pillow kornia timm \
     gradio==6.0.1 tensorboard pandas lpips zstandard
 
 # Install utils3d
