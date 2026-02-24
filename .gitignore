@@ -34,9 +34,6 @@ output/
 # Claude
 .claude/
 
-# Node
-node_modules/
-
-# Rust/Tauri
-target/
-Cargo.lock
+# Blender
+*.blend1
+charmaker.zip

@@ -26,14 +26,14 @@ class CharMakerPreferences(AddonPreferences):
     gemini_model: EnumProperty(
         name="Gemini Model",
         items=[
-            ('gemini-2.5-flash-preview-image-generation',
-             "2.5 Flash (Preview)",
+            ('gemini-2.5-flash-image',
+             "2.5 Flash",
              "Fast image generation (default)"),
-            ('gemini-2.0-flash-exp',
-             "2.0 Flash (Exp)",
-             "Alternative model"),
+            ('gemini-3-pro-image-preview',
+             "3 Pro (Preview)",
+             "Highest quality, reasoning-enhanced"),
         ],
-        default='gemini-2.5-flash-preview-image-generation',
+        default='gemini-2.5-flash-image',
     )
 
     def draw(self, context):
