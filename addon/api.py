@@ -6,6 +6,24 @@ import time
 import urllib.error
 import urllib.request
 
+_DNS_RETRIES = 3
+_DNS_RETRY_DELAY = 2
+
+
+def _urlopen_with_retry(req, timeout):
+    """urlopen wrapper that retries on transient DNS/connection errors."""
+    for attempt in range(_DNS_RETRIES):
+        try:
+            return urllib.request.urlopen(req, timeout=timeout)
+        except urllib.error.URLError as e:
+            is_dns = "Name or service not known" in str(e.reason)
+            is_conn = "Temporary failure in name resolution" in str(e.reason)
+            if (is_dns or is_conn) and attempt < _DNS_RETRIES - 1:
+                time.sleep(_DNS_RETRY_DELAY)
+                continue
+            raise
+    raise urllib.error.URLError("DNS resolution failed after retries")
+
 
 class RunPodError(Exception):
     pass
@@ -39,7 +57,7 @@ def call_runpod(api_key, endpoint_id, payload, timeout=300):
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _urlopen_with_retry(req, timeout=timeout) as resp:
             result = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
@@ -56,23 +74,17 @@ def call_runpod(api_key, endpoint_id, payload, timeout=300):
         status_url = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
         deadline = time.monotonic() + timeout
 
-        poll_failures = 0
         while time.monotonic() < deadline:
             time.sleep(5)
 
             status_req = urllib.request.Request(status_url, headers=headers)
             try:
-                with urllib.request.urlopen(status_req, timeout=30) as resp:
+                with _urlopen_with_retry(status_req, timeout=30) as resp:
                     result = json.loads(resp.read().decode("utf-8"))
-                poll_failures = 0
             except urllib.error.HTTPError as e:
                 raise RunPodError(f"Polling error: HTTP {e.code}") from e
-            except urllib.error.URLError:
-                # Transient DNS/connection failure — retry up to 3 times
-                poll_failures += 1
-                if poll_failures >= 3:
-                    raise RunPodError("Polling failed: connection error (retried 3 times)")
-                continue
+            except urllib.error.URLError as e:
+                raise RunPodError(f"Polling error: {e.reason}") from e
 
             status = result.get("status")
             if status == "COMPLETED":
@@ -138,7 +150,7 @@ def call_gemini(api_key, model, prompt, image_b64=None, timeout=120):
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _urlopen_with_retry(req, timeout=timeout) as resp:
             result = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
