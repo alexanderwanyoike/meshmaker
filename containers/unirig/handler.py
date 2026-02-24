@@ -119,14 +119,14 @@ def run_unirig_pipeline(input_glb_path: str, output_fbx_path: str, seed: int = 1
         skeleton_output = temp_dir / "skeleton.fbx"
         skinned_output = temp_dir / "skinned.fbx"
 
-        # Stage 1: Generate skeleton
+        # Stage 1: Generate skeleton from input mesh
         print("Stage 1: Generating skeleton...")
         start_time = time.time()
 
         skeleton_cmd = [
-            "bash", "generate_skeleton.sh",
-            str(input_mesh),
-            str(skeleton_output),
+            "bash", "launch/inference/generate_skeleton.sh",
+            "--input", str(input_mesh),
+            "--output", str(skeleton_output),
             "--seed", str(seed),
         ]
 
@@ -138,20 +138,21 @@ def run_unirig_pipeline(input_glb_path: str, output_fbx_path: str, seed: int = 1
         )
 
         if result.returncode != 0:
-            raise RuntimeError(f"Skeleton generation failed: {result.stderr}")
+            raise RuntimeError(
+                f"Skeleton generation failed:\nstderr: {result.stderr}\nstdout: {result.stdout}"
+            )
 
         timings["skeleton_generation"] = time.time() - start_time
         print(f"  Skeleton generated in {timings['skeleton_generation']:.2f}s")
 
-        # Stage 2: Generate skin weights
+        # Stage 2: Generate skin weights from skeleton output
         print("Stage 2: Generating skin weights...")
         start_time = time.time()
 
         skin_cmd = [
-            "bash", "generate_skin.sh",
-            str(input_mesh),
-            str(skeleton_output),
-            str(skinned_output),
+            "bash", "launch/inference/generate_skin.sh",
+            "--input", str(skeleton_output),
+            "--output", str(skinned_output),
             "--seed", str(seed),
         ]
 
@@ -163,20 +164,22 @@ def run_unirig_pipeline(input_glb_path: str, output_fbx_path: str, seed: int = 1
         )
 
         if result.returncode != 0:
-            raise RuntimeError(f"Skin weight generation failed: {result.stderr}")
+            raise RuntimeError(
+                f"Skin weight generation failed:\nstderr: {result.stderr}\nstdout: {result.stdout}"
+            )
 
         timings["skin_generation"] = time.time() - start_time
         print(f"  Skin weights generated in {timings['skin_generation']:.2f}s")
 
-        # Stage 3: Merge with original mesh
-        print("Stage 3: Merging to final FBX...")
+        # Stage 3: Merge skinned result with original mesh
+        print("Stage 3: Merging to final output...")
         start_time = time.time()
 
         merge_cmd = [
-            "bash", "merge.sh",
-            str(input_mesh),
-            str(skinned_output),
-            str(output_fbx_path),
+            "bash", "launch/inference/merge.sh",
+            "--source", str(skinned_output),
+            "--target", str(input_mesh),
+            "--output", str(output_fbx_path),
         ]
 
         result = subprocess.run(
@@ -187,7 +190,9 @@ def run_unirig_pipeline(input_glb_path: str, output_fbx_path: str, seed: int = 1
         )
 
         if result.returncode != 0:
-            raise RuntimeError(f"Merge failed: {result.stderr}")
+            raise RuntimeError(
+                f"Merge failed:\nstderr: {result.stderr}\nstdout: {result.stdout}"
+            )
 
         timings["merge"] = time.time() - start_time
         print(f"  Merged in {timings['merge']:.2f}s")

@@ -12,12 +12,14 @@ Environment:
 
 import argparse
 import base64
+import json
 import os
 import sys
 import time
+import urllib.error
+import urllib.request
 
 from dotenv import load_dotenv
-import requests
 
 load_dotenv()
 
@@ -31,7 +33,6 @@ def main():
     parser.add_argument("--api-key", help="RunPod API key (or set RUNPOD_API_KEY)")
     args = parser.parse_args()
 
-    # Get credentials
     api_key = args.api_key or os.environ.get("RUNPOD_API_KEY")
     endpoint_id = args.endpoint or os.environ.get("UNIRIG_ENDPOINT_ID")
 
@@ -47,9 +48,9 @@ def main():
     with open(args.input_glb, "rb") as f:
         mesh_b64 = base64.b64encode(f.read()).decode("utf-8")
 
-    # Submit job
+    # Submit async job via /run
     print(f"Submitting to RunPod endpoint {endpoint_id}...")
-    url = f"https://api.runpod.ai/v2/{endpoint_id}/runsync"
+    url = f"https://api.runpod.ai/v2/{endpoint_id}/run"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -62,66 +63,91 @@ def main():
         }
     }
 
-    start_time = time.time()
-    response = requests.post(url, json=payload, headers=headers, timeout=300)
-    response.raise_for_status()
-    result = response.json()
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
 
-    # Check for errors
+    start_time = time.time()
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        result = json.loads(resp.read().decode("utf-8"))
+
     if "error" in result:
         print(f"Error: {result['error']}", file=sys.stderr)
-        if "traceback" in result:
-            print(result["traceback"], file=sys.stderr)
         sys.exit(1)
 
-    # Handle async response (job queued)
-    if result.get("status") == "IN_QUEUE" or result.get("status") == "IN_PROGRESS":
-        job_id = result["id"]
-        print(f"Job queued: {job_id}, waiting...")
+    job_id = result.get("id")
+    if not job_id:
+        print(f"Error: No job ID in response: {result}", file=sys.stderr)
+        sys.exit(1)
 
-        # Poll for completion
-        status_url = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
-        while True:
-            time.sleep(5)
-            status_response = requests.get(status_url, headers=headers)
-            status_response.raise_for_status()
-            result = status_response.json()
+    print(f"Job submitted: {job_id}")
 
-            if result.get("status") == "COMPLETED":
-                result = result.get("output", result)
-                break
-            elif result.get("status") == "FAILED":
-                print(f"Job failed: {result}", file=sys.stderr)
-                sys.exit(1)
+    # Poll for completion
+    status_url = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
+    while True:
+        time.sleep(5)
+
+        try:
+            status_req = urllib.request.Request(status_url, headers=headers)
+            with urllib.request.urlopen(status_req, timeout=90) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            print(f"  Poll error ({e}), retrying...")
+            continue
+
+        status = result.get("status")
+        if status == "COMPLETED":
+            break
+        elif status == "FAILED":
+            output = result.get("output", result)
+            print(f"Job failed!", file=sys.stderr)
+            if isinstance(output, dict) and "error" in output:
+                print(f"  Error: {output['error']}", file=sys.stderr)
+                if "traceback" in output:
+                    print(output["traceback"], file=sys.stderr)
             else:
-                print(f"  Status: {result.get('status')}...")
+                print(f"  Response: {json.dumps(result, indent=2)}", file=sys.stderr)
+            sys.exit(1)
+        else:
+            elapsed = time.time() - start_time
+            print(f"  {status}... ({elapsed:.0f}s)")
 
     elapsed = time.time() - start_time
 
-    # Extract output from response
-    output = result.get("output", result)
-    if "error" in output:
-        print(f"Error: {output['error']}", file=sys.stderr)
+    # Extract output
+    output = result.get("output", {})
+    if isinstance(output, str):
+        # Entire output is the base64 FBX
+        fbx_b64 = output
+        output = {}
+    elif isinstance(output, dict):
+        if "error" in output:
+            print(f"Error: {output['error']}", file=sys.stderr)
+            if "traceback" in output:
+                print(output["traceback"], file=sys.stderr)
+            sys.exit(1)
+        fbx_b64 = output.get("output")
+    else:
+        print(f"Error: Unexpected output format: {type(output)}", file=sys.stderr)
         sys.exit(1)
 
-    # Decode and save FBX
-    fbx_b64 = output.get("output")
     if not fbx_b64:
-        print(f"Error: No output in response: {output}", file=sys.stderr)
+        print(f"Error: No FBX data in response", file=sys.stderr)
+        print(f"  Keys: {list(output.keys()) if isinstance(output, dict) else 'N/A'}", file=sys.stderr)
         sys.exit(1)
 
+    # Save output
     print(f"Saving {args.output_fbx}...")
     with open(args.output_fbx, "wb") as f:
         f.write(base64.b64decode(fbx_b64))
 
-    # Print stats
     print(f"\nSuccess!")
     print(f"  Total time: {elapsed:.1f}s")
-    if "processing_time" in output:
-        print(f"  Processing time: {output['processing_time']:.1f}s")
-    if "timings" in output:
-        for stage, t in output["timings"].items():
-            print(f"    {stage}: {t:.1f}s")
+    if isinstance(output, dict):
+        if "processing_time" in output:
+            print(f"  Processing time: {output['processing_time']:.1f}s")
+        if "timings" in output:
+            for stage, t in output["timings"].items():
+                print(f"    {stage}: {t:.1f}s")
     print(f"  Output: {args.output_fbx}")
 
 
