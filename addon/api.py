@@ -56,6 +56,7 @@ def call_runpod(api_key, endpoint_id, payload, timeout=300):
         status_url = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
         deadline = time.monotonic() + timeout
 
+        poll_failures = 0
         while time.monotonic() < deadline:
             time.sleep(5)
 
@@ -63,8 +64,15 @@ def call_runpod(api_key, endpoint_id, payload, timeout=300):
             try:
                 with urllib.request.urlopen(status_req, timeout=30) as resp:
                     result = json.loads(resp.read().decode("utf-8"))
-            except (urllib.error.HTTPError, urllib.error.URLError) as e:
-                raise RunPodError(f"Polling error: {e}") from e
+                poll_failures = 0
+            except urllib.error.HTTPError as e:
+                raise RunPodError(f"Polling error: HTTP {e.code}") from e
+            except urllib.error.URLError:
+                # Transient DNS/connection failure — retry up to 3 times
+                poll_failures += 1
+                if poll_failures >= 3:
+                    raise RunPodError("Polling failed: connection error (retried 3 times)")
+                continue
 
             status = result.get("status")
             if status == "COMPLETED":
