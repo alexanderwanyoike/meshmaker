@@ -28,11 +28,11 @@ def main():
     parser.add_argument("output_glb", help="Path for output GLB file")
     parser.add_argument("--resolution", type=int, default=512, choices=[512, 1024, 1536],
                         help="Generation resolution (default: 512)")
-    parser.add_argument("--texture-size", type=int, default=2048, choices=[1024, 2048, 4096],
-                        help="Output texture size (default: 2048)")
+    parser.add_argument("--texture-size", type=int, default=1024, choices=[1024, 2048, 4096],
+                        help="Output texture size (default: 1024)")
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
-    parser.add_argument("--decimation", type=int, default=None,
-                        help="Target face count for mesh decimation")
+    parser.add_argument("--decimation", type=int, default=100000,
+                        help="Target face count for mesh decimation (default: 100000)")
     parser.add_argument("--endpoint", help="RunPod endpoint ID (or set TRELLIS_ENDPOINT_ID)")
     parser.add_argument("--api-key", help="RunPod API key (or set RUNPOD_API_KEY)")
     args = parser.parse_args()
@@ -61,8 +61,7 @@ def main():
     }
     if args.seed is not None:
         payload_input["seed"] = args.seed
-    if args.decimation is not None:
-        payload_input["decimation_target"] = args.decimation
+    payload_input["decimation_target"] = args.decimation
 
     # Submit job
     print(f"Submitting to RunPod endpoint {endpoint_id}...")
@@ -98,10 +97,18 @@ def main():
             result = status_response.json()
 
             if result.get("status") == "COMPLETED":
-                result = result.get("output", result)
+                if result.get("output") is None:
+                    print(f"Job completed but output is empty. Full response:", file=sys.stderr)
+                    # Print everything except potentially huge base64 data
+                    import json
+                    print(json.dumps({k: v for k, v in result.items() if k != "output"}, indent=2, default=str), file=sys.stderr)
+                    sys.exit(1)
+                result = result["output"]
                 break
             elif result.get("status") == "FAILED":
-                print(f"Job failed: {result}", file=sys.stderr)
+                print(f"Job failed:", file=sys.stderr)
+                import json
+                print(json.dumps(result, indent=2, default=str), file=sys.stderr)
                 sys.exit(1)
             else:
                 print(f"  Status: {result.get('status')}...")

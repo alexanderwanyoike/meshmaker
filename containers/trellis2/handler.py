@@ -95,8 +95,8 @@ def generate_3d(
     image_input: str,
     resolution: int = 512,
     seed: int | None = None,
-    decimation_target: int | None = None,
-    texture_size: int = 4096,
+    decimation_target: int = 100_000,
+    texture_size: int = 1024,
 ) -> dict[str, Any]:
     """
     Generate a 3D GLB model from an input image.
@@ -105,8 +105,9 @@ def generate_3d(
         image_input: Base64-encoded image or URL
         resolution: Generation resolution (512, 1024, or 1536)
         seed: Random seed for reproducibility
-        decimation_target: Target number of faces for mesh decimation (optional)
-        texture_size: Output texture resolution (1024, 2048, or 4096)
+        decimation_target: Target number of faces for mesh decimation (default: 100k)
+        texture_size: Output texture resolution (1024, 2048, or 4096). Default 1024
+            to keep GLB under ~15MB for RunPod sync response limits.
 
     Returns:
         Dictionary with base64-encoded GLB and metadata
@@ -123,7 +124,7 @@ def generate_3d(
 
     # Validate texture size
     if texture_size not in (1024, 2048, 4096):
-        texture_size = 4096
+        texture_size = 1024
         print(f"Invalid texture_size, using default: {texture_size}")
 
     # Set random seed
@@ -199,8 +200,8 @@ def generate_3d(
     # Apply nvdiffrast simplification limit
     mesh.simplify(16777216)
 
-    # Apply additional decimation if requested
-    decimation = decimation_target if (decimation_target and decimation_target > 0) else 1000000
+    # Apply decimation
+    decimation = decimation_target if (decimation_target and decimation_target > 0) else 100_000
 
     # Save GLB to temporary file and read as bytes
     with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:
@@ -236,6 +237,11 @@ def generate_3d(
     # Encode GLB as base64
     glb_base64 = base64.b64encode(glb_bytes).decode("utf-8")
 
+    # Warn if output exceeds RunPod sync response limit (~20MB; base64 adds ~33%)
+    b64_mb = len(glb_base64) / 1024 / 1024
+    if b64_mb > 15:
+        print(f"WARNING: Base64 output is {b64_mb:.1f} MB — may exceed RunPod sync limit (~20MB)")
+
     total_time = time.time() - start_time
     print(f"Total generation time: {total_time:.2f}s")
 
@@ -269,8 +275,8 @@ def handler(job: dict) -> dict:
         "image_input": image_input,
         "resolution": job_input.get("resolution", 512),
         "seed": job_input.get("seed"),
-        "decimation_target": job_input.get("decimation_target"),
-        "texture_size": job_input.get("texture_size", 4096),
+        "decimation_target": job_input.get("decimation_target", 100_000),
+        "texture_size": job_input.get("texture_size", 1024),
     }
 
     try:
