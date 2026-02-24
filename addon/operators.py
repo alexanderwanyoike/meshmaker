@@ -121,7 +121,20 @@ class CHARMAKER_OT_generate_image(Operator):
 
             img = bpy.data.images.load(tmp.name)
             img.name = PREVIEW_NAME
+
+            # Manually populate preview pixels — preview_ensure() is async
+            # and won't be ready by the time the panel redraws.
+            # Set both icon and image previews so template_icon works
+            # at any scale.
             img.preview_ensure()
+            w, h = img.size
+            px = img.pixels[:]
+            p = img.preview
+            p.icon_size = (w, h)
+            p.icon_pixels_float = px
+            p.image_size = (w, h)
+            p.image_pixels_float = px
+
             wm.charmaker_preview_image = PREVIEW_NAME
 
             wm.charmaker_status = "Image ready"

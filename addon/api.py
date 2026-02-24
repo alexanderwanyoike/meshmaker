@@ -29,10 +29,10 @@ class RunPodError(Exception):
     pass
 
 
-def call_runpod(api_key, endpoint_id, payload, timeout=300):
+def call_runpod(api_key, endpoint_id, payload, timeout=600):
     """Call a RunPod serverless endpoint and return the result.
 
-    Handles both synchronous responses and async polling for queued jobs.
+    Submits via /run (async) then polls /status until completion.
     Uses only stdlib (urllib) so there are no external dependencies.
 
     Args:
@@ -47,7 +47,7 @@ def call_runpod(api_key, endpoint_id, payload, timeout=300):
     Raises:
         RunPodError: On API errors, timeouts, or missing output.
     """
-    url = f"https://api.runpod.ai/v2/{endpoint_id}/runsync"
+    url = f"https://api.runpod.ai/v2/{endpoint_id}/run"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -57,7 +57,7 @@ def call_runpod(api_key, endpoint_id, payload, timeout=300):
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
 
     try:
-        with _urlopen_with_retry(req, timeout=timeout) as resp:
+        with _urlopen_with_retry(req, timeout=60) as resp:
             result = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
@@ -68,41 +68,39 @@ def call_runpod(api_key, endpoint_id, payload, timeout=300):
     if "error" in result:
         raise RunPodError(result["error"])
 
-    # Handle async (queued) jobs
-    if result.get("status") in ("IN_QUEUE", "IN_PROGRESS"):
-        job_id = result["id"]
-        status_url = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
-        deadline = time.monotonic() + timeout
+    job_id = result.get("id")
+    if not job_id:
+        raise RunPodError("No job ID in response")
 
-        while time.monotonic() < deadline:
-            time.sleep(5)
+    # Poll for completion. The COMPLETED response includes the full output
+    # (20MB+ base64 GLB), so we use a generous read timeout and catch ALL
+    # exceptions — any transient failure (DNS, socket timeout, incomplete
+    # read, connection reset) just triggers a retry on the next iteration.
+    status_url = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
+    deadline = time.monotonic() + timeout
 
+    while time.monotonic() < deadline:
+        time.sleep(5)
+
+        try:
             status_req = urllib.request.Request(status_url, headers=headers)
-            try:
-                with _urlopen_with_retry(status_req, timeout=30) as resp:
-                    result = json.loads(resp.read().decode("utf-8"))
-            except urllib.error.HTTPError as e:
-                raise RunPodError(f"Polling error: HTTP {e.code}") from e
-            except urllib.error.URLError as e:
-                raise RunPodError(f"Polling error: {e.reason}") from e
+            with _urlopen_with_retry(status_req, timeout=90) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            # Any failure during polling (DNS, socket, read, parse) —
+            # retry on next iteration instead of crashing
+            continue
 
-            status = result.get("status")
-            if status == "COMPLETED":
-                output = result.get("output")
-                if output is None:
-                    raise RunPodError("Job completed but output is empty")
-                return output
-            elif status == "FAILED":
-                raise RunPodError(f"Job failed: {json.dumps(result, default=str)}")
+        status = result.get("status")
+        if status == "COMPLETED":
+            output = result.get("output")
+            if output is None:
+                raise RunPodError("Job completed but output is empty")
+            return output
+        elif status == "FAILED":
+            raise RunPodError(f"Job failed: {json.dumps(result, default=str)}")
 
-        raise RunPodError(f"Job {job_id} timed out after {timeout}s")
-
-    # Synchronous response
-    output = result.get("output", result)
-    if "error" in output:
-        raise RunPodError(output["error"])
-
-    return output
+    raise RunPodError(f"Job {job_id} timed out after {timeout}s")
 
 
 class GeminiError(Exception):
