@@ -7,15 +7,19 @@ FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 ENV PYTHONUNBUFFERED=1
 ENV HF_HOME=/runpod-volume/huggingface
 ENV TRANSFORMERS_CACHE=/runpod-volume/huggingface
+# pyrender needs EGL for headless GPU rendering (used by skin voxelization)
+ENV PYOPENGL_PLATFORM=egl
 
 # Install system dependencies
 # - git-lfs: for cloning repos with large files
 # - libgl1-mesa-glx, libglib2.0-0: for mesh loading (open3d/trimesh)
+# - libegl1-mesa-dev: EGL for headless OpenGL (pyrender in skin stage)
 # - X11 libs: required by bpy (used in data extraction for all stages)
 RUN apt-get update && apt-get install -y \
     git-lfs \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    libegl1-mesa-dev \
     libxrender1 \
     libsm6 \
     libxext6 \
