@@ -1,5 +1,6 @@
 # UniRig RunPod Serverless Container
-# Automatic rigging: GLB mesh -> FBX with Mixamo-compatible skeleton
+# Inference only: GLB mesh -> FBX with predicted skeleton + skin weights
+# Merge step (applying rig to original mesh) is done locally in Blender
 
 FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
@@ -9,19 +10,11 @@ ENV TRANSFORMERS_CACHE=/runpod-volume/huggingface
 
 # Install system dependencies
 # - git-lfs: for cloning repos with large files
-# - libgl1-mesa-glx, libglib2.0-0: for bpy/pyrender headless rendering
-# - libxrender1, libsm6, libxi6, etc.: X11 libs required by bpy headless
+# - libgl1-mesa-glx, libglib2.0-0: for mesh loading (open3d/trimesh)
 RUN apt-get update && apt-get install -y \
     git-lfs \
     libgl1-mesa-glx \
     libglib2.0-0 \
-    libxrender1 \
-    libsm6 \
-    libxext6 \
-    libxi6 \
-    libxxf86vm1 \
-    libxfixes3 \
-    libxkbcommon0 \
     && rm -rf /var/lib/apt/lists/* \
     && git lfs install
 
@@ -36,7 +29,6 @@ RUN pip install --no-cache-dir --ignore-installed -r requirements.txt
 # Install CUDA-specific packages for cu124
 # - spconv-cu124: sparse convolutions for point cloud processing
 # - torch_scatter, torch_cluster: geometric deep learning ops
-# - flash_attn: fast attention (optional but improves performance)
 RUN pip install --no-cache-dir \
     spconv-cu124 \
     torch_scatter -f https://data.pyg.org/whl/torch-2.4.0+cu124.html \

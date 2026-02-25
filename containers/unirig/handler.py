@@ -1,12 +1,12 @@
 """
 RunPod Serverless Handler for UniRig
 
-Automatic rigging: GLB mesh -> FBX with Mixamo-compatible skeleton
+Inference only: GLB mesh -> FBX with predicted skeleton + skin weights
+Merge step (applying rig to original mesh) is done locally in Blender.
 
-UniRig pipeline:
+UniRig inference pipeline:
 1. generate_skeleton.sh - Predict skeleton joints from mesh
-2. generate_skin.sh - Predict skin weights
-3. merge.sh - Combine skeleton + weights with original mesh -> FBX output
+2. generate_skin.sh - Predict skin weights from skeleton
 """
 
 import os
@@ -92,17 +92,17 @@ def load_models():
     print("UniRig initialization complete!")
 
 
-def run_unirig_pipeline(input_glb_path: str, output_fbx_path: str, seed: int = 12345) -> dict:
+def run_unirig_inference(input_glb_path: str, output_fbx_path: str, seed: int = 12345) -> dict:
     """
-    Run the full UniRig pipeline: skeleton generation -> skin weights -> merge to FBX.
+    Run UniRig inference: skeleton generation -> skin weight prediction.
 
     Args:
         input_glb_path: Path to input GLB mesh file
-        output_fbx_path: Path for output FBX file
+        output_fbx_path: Path for output FBX file (skeleton + skin weights)
         seed: Random seed for reproducibility
 
     Returns:
-        Dictionary with timing info and status
+        Dictionary with timing info
     """
     timings = {}
     os.chdir(UNIRIG_DIR)
@@ -117,7 +117,7 @@ def run_unirig_pipeline(input_glb_path: str, output_fbx_path: str, seed: int = 1
 
         # Intermediate output paths
         skeleton_output = temp_dir / "skeleton.fbx"
-        skinned_output = temp_dir / "skinned.fbx"
+        output_fbx = Path(output_fbx_path)
 
         # Stage 1: Generate skeleton from input mesh
         print("Stage 1: Generating skeleton...")
@@ -159,7 +159,7 @@ def run_unirig_pipeline(input_glb_path: str, output_fbx_path: str, seed: int = 1
         skin_cmd = [
             "bash", "launch/inference/generate_skin.sh",
             "--input", str(skeleton_output),
-            "--output", str(skinned_output),
+            "--output", str(output_fbx),
             "--seed", str(seed),
         ]
 
@@ -175,49 +175,15 @@ def run_unirig_pipeline(input_glb_path: str, output_fbx_path: str, seed: int = 1
                 f"Skin weight generation failed (rc={result.returncode}):\n"
                 f"stderr: {result.stderr}\nstdout: {result.stdout}"
             )
-        if not skinned_output.exists():
+        if not output_fbx.exists():
             raise RuntimeError(
-                f"Skin generation produced no output at {skinned_output}\n"
+                f"Skin generation produced no output at {output_fbx}\n"
                 f"stdout: {result.stdout}\nstderr: {result.stderr}"
             )
 
         timings["skin_generation"] = time.time() - start_time
-        size_kb = skinned_output.stat().st_size / 1024
-        print(f"  Skin weights generated in {timings['skin_generation']:.2f}s ({size_kb:.0f}KB)")
-
-        # Stage 3: Merge skinned result with original mesh
-        print("Stage 3: Merging to final output...")
-        start_time = time.time()
-
-        output_fbx = Path(output_fbx_path)
-        merge_cmd = [
-            "bash", "launch/inference/merge.sh",
-            "--source", str(skinned_output),
-            "--target", str(input_mesh),
-            "--output", str(output_fbx),
-        ]
-
-        result = subprocess.run(
-            merge_cmd,
-            capture_output=True,
-            text=True,
-            cwd=UNIRIG_DIR,
-        )
-
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"Merge failed (rc={result.returncode}):\n"
-                f"stderr: {result.stderr}\nstdout: {result.stdout}"
-            )
-        if not output_fbx.exists():
-            raise RuntimeError(
-                f"Merge produced no output at {output_fbx}\n"
-                f"stdout: {result.stdout}\nstderr: {result.stderr}"
-            )
-
-        timings["merge"] = time.time() - start_time
         size_kb = output_fbx.stat().st_size / 1024
-        print(f"  Merged in {timings['merge']:.2f}s ({size_kb:.0f}KB)")
+        print(f"  Skin weights generated in {timings['skin_generation']:.2f}s ({size_kb:.0f}KB)")
 
     return timings
 
@@ -231,12 +197,7 @@ def handler(job: dict) -> dict:
     if not mesh_b64:
         return {"error": "Missing required field: mesh (base64 encoded GLB)"}
 
-    # Optional parameters
-    output_format = job_input.get("format", "fbx").lower()
     seed = job_input.get("seed", 12345)
-
-    if output_format != "fbx":
-        return {"error": f"Unsupported output format: {output_format}. Only 'fbx' is supported."}
 
     try:
         start_time = time.time()
@@ -250,8 +211,8 @@ def handler(job: dict) -> dict:
         output_path = tempfile.mktemp(suffix=".fbx")
 
         try:
-            # Run UniRig pipeline
-            timings = run_unirig_pipeline(input_path, output_path, seed=seed)
+            # Run UniRig inference (skeleton + skin only, no merge)
+            timings = run_unirig_inference(input_path, output_path, seed=seed)
 
             # Read and encode output
             with open(output_path, "rb") as f:

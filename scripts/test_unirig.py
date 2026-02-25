@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Test client for UniRig RunPod endpoint.
+Returns FBX with predicted skeleton + skin weights (inference only, no merge).
 
 Usage:
     python scripts/test_unirig.py input.glb output.fbx
@@ -58,7 +59,6 @@ def main():
     payload = {
         "input": {
             "mesh": mesh_b64,
-            "format": "fbx",
             "seed": args.seed,
         }
     }
