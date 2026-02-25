@@ -31,16 +31,22 @@ WORKDIR /app
 RUN git clone https://github.com/VAST-AI-Research/UniRig.git /app/unirig
 
 # Install UniRig requirements
+# Do NOT use --ignore-installed: it causes pip to reinstall torch (pulled by
+# pytorch_lightning/lightning), upgrading past 2.4.0 and breaking the ABI for
+# pre-built torch_scatter/torch_cluster wheels.
 WORKDIR /app/unirig
-RUN pip install --no-cache-dir --ignore-installed -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Install CUDA-specific packages for cu124
 # - spconv-cu124: sparse convolutions for point cloud processing
 # - torch_scatter, torch_cluster: geometric deep learning ops
+# These wheels must match the base image's torch version exactly.
 RUN pip install --no-cache-dir \
     spconv-cu124 \
     torch_scatter -f https://data.pyg.org/whl/torch-2.4.0+cu124.html \
-    torch_cluster -f https://data.pyg.org/whl/torch-2.4.0+cu124.html
+    torch_cluster -f https://data.pyg.org/whl/torch-2.4.0+cu124.html \
+    && python -c "import torch; assert torch.__version__.startswith('2.4.'), f'Expected torch 2.4.x, got {torch.__version__}'" \
+    && python -c "import torch_cluster; print('torch_cluster OK')"
 
 # Install flash attention (may fail on some GPUs, non-fatal)
 RUN pip install --no-cache-dir flash_attn || echo "Warning: flash_attn installation failed, will use fallback attention"
