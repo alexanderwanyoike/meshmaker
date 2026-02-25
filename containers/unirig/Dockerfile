@@ -7,19 +7,19 @@ FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 ENV PYTHONUNBUFFERED=1
 ENV HF_HOME=/runpod-volume/huggingface
 ENV TRANSFORMERS_CACHE=/runpod-volume/huggingface
-# pyrender needs headless OpenGL for skin voxelization — use OSMesa
-# (software rendering, doesn't depend on NVIDIA EGL being available at runtime)
+# pyrender needs headless OpenGL for skin voxelization
 ENV PYOPENGL_PLATFORM=osmesa
 
 # Install system dependencies
 # - git-lfs: for cloning repos with large files
 # - libgl1-mesa-glx, libglib2.0-0: for mesh loading (open3d/trimesh)
-# - libosmesa6-dev: headless OpenGL via OSMesa (pyrender in skin stage)
+# - libegl1-mesa-dev + libosmesa6-dev: headless OpenGL (EGL + OSMesa fallback)
 # - X11 libs: required by bpy (used in data extraction for all stages)
 RUN apt-get update && apt-get install -y \
     git-lfs \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    libegl1-mesa-dev \
     libosmesa6-dev \
     libxrender1 \
     libsm6 \
