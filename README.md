@@ -11,7 +11,7 @@ Text/Image → 3D Model → Rigged Character → Animated Character → Game-Rea
 
 ## Project Status
 
-**Active development.** Currently restructuring from a single-purpose motion generator into a full character pipeline.
+**Active development.** The frontend is a Blender addon — Blender provides the viewport, mesh editing, rigging, and animation tools.
 
 See `.notes/` for detailed planning documents:
 - `charmaker-vision.md` - Full vision and architecture
@@ -21,57 +21,51 @@ See `.notes/` for detailed planning documents:
 
 ```
 charmaker/
-├── app/                    # Tauri desktop app (planned)
+├── addon/                  # Blender addon (CharMaker panel)
 ├── containers/
-│   └── hymotion/           # Text-to-animation container (working)
+│   ├── hymotion/           # Text-to-animation container (working)
+│   │   ├── Dockerfile
+│   │   ├── handler.py
+│   │   └── stats/
+│   └── trellis2/           # Image-to-3D container (working)
 │       ├── Dockerfile
-│       ├── handler.py
-│       └── stats/
-├── shared/                 # Shared utilities (planned)
+│       └── handler.py
+├── scripts/                # CLI test scripts
 └── .notes/                 # Planning documents
 ```
 
-## Current Capability: HY-Motion Container
+## Blender Addon
 
-The `containers/hymotion/` directory contains a working RunPod serverless container for text-to-animation generation using [HY-Motion-1.0](https://github.com/Tencent-Hunyuan/HY-Motion-1.0).
+The `addon/` directory is a Blender addon that calls RunPod serverless endpoints to generate 3D meshes directly into Blender.
 
-### Quick Start
+### Install
 
-1. Push to GitHub - image builds via GitHub Actions to `ghcr.io/<user>/charmaker/hymotion:latest`
-2. Make the package public in GitHub Package settings
-3. Create RunPod endpoint with 48GB GPU and network volume mounted at `/runpod-volume`
-4. Send requests with text prompts, receive SMPL-H motion data
+1. Edit → Preferences → Add-ons → Install from Disk
+2. Select the `addon/` folder
+3. Enable "CharMaker" in the addon list
+4. Set your RunPod API key and Trellis endpoint ID in addon preferences
 
-### API
+### Usage
 
-```bash
-curl -X POST "https://api.runpod.ai/v2/${ENDPOINT_ID}/run" \
-  -H "Authorization: Bearer ${RUNPOD_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": {
-      "prompt": "person walking forward",
-      "duration": 4.0,
-      "fps": 30
-    }
-  }'
-```
+1. Open the sidebar (N key) → CharMaker tab
+2. Pick a reference image
+3. Adjust resolution / texture size
+4. Click "Generate 3D"
 
 ## Roadmap
 
 | Card | Component | Status |
 |------|-----------|--------|
-| 0 | Repo restructure | In Progress |
-| 1 | Trellis 2 / Hunyuan 3D container | Planned |
+| 0 | Repo restructure | Done |
+| 1 | Trellis 2 container | Done |
 | 2 | UniRig container | Planned |
 | 3 | HY-Motion update (retargeting) | Planned |
-| 4 | Tauri app scaffold | Planned |
 | 5 | Pipeline integration | Planned |
 | 6 | Testing & docs | Planned |
 
 ## Links
 
 - [HY-Motion-1.0](https://github.com/Tencent-Hunyuan/HY-Motion-1.0) - Text-to-motion model
-- [Trellis 2](https://github.com/microsoft/TRELLIS.2) - Image/text to 3D (planned)
+- [Trellis 2](https://github.com/microsoft/TRELLIS.2) - Image/text to 3D
 - [UniRig](https://github.com/VAST-AI-Research/UniRig) - Auto-rigging (planned)
 - [RunPod Serverless](https://docs.runpod.io/serverless) - GPU infrastructure
