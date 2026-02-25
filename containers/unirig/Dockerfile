@@ -10,7 +10,7 @@ ENV TRANSFORMERS_CACHE=/runpod-volume/huggingface
 # Install system dependencies
 # - git-lfs: for cloning repos with large files
 # - libgl1-mesa-glx, libglib2.0-0: for bpy/pyrender headless rendering
-# - libxrender1, libsm6: additional rendering deps
+# - libxrender1, libsm6, libxi6, etc.: X11 libs required by bpy headless
 RUN apt-get update && apt-get install -y \
     git-lfs \
     libgl1-mesa-glx \
@@ -18,6 +18,10 @@ RUN apt-get update && apt-get install -y \
     libxrender1 \
     libsm6 \
     libxext6 \
+    libxi6 \
+    libxxf86vm1 \
+    libxfixes3 \
+    libxkbcommon0 \
     && rm -rf /var/lib/apt/lists/* \
     && git lfs install
 
