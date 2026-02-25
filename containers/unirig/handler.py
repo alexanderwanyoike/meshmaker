@@ -139,11 +139,18 @@ def run_unirig_pipeline(input_glb_path: str, output_fbx_path: str, seed: int = 1
 
         if result.returncode != 0:
             raise RuntimeError(
-                f"Skeleton generation failed:\nstderr: {result.stderr}\nstdout: {result.stdout}"
+                f"Skeleton generation failed (rc={result.returncode}):\n"
+                f"stderr: {result.stderr}\nstdout: {result.stdout}"
+            )
+        if not skeleton_output.exists():
+            raise RuntimeError(
+                f"Skeleton generation produced no output at {skeleton_output}\n"
+                f"stdout: {result.stdout}\nstderr: {result.stderr}"
             )
 
         timings["skeleton_generation"] = time.time() - start_time
-        print(f"  Skeleton generated in {timings['skeleton_generation']:.2f}s")
+        size_kb = skeleton_output.stat().st_size / 1024
+        print(f"  Skeleton generated in {timings['skeleton_generation']:.2f}s ({size_kb:.0f}KB)")
 
         # Stage 2: Generate skin weights from skeleton output
         print("Stage 2: Generating skin weights...")
@@ -165,21 +172,29 @@ def run_unirig_pipeline(input_glb_path: str, output_fbx_path: str, seed: int = 1
 
         if result.returncode != 0:
             raise RuntimeError(
-                f"Skin weight generation failed:\nstderr: {result.stderr}\nstdout: {result.stdout}"
+                f"Skin weight generation failed (rc={result.returncode}):\n"
+                f"stderr: {result.stderr}\nstdout: {result.stdout}"
+            )
+        if not skinned_output.exists():
+            raise RuntimeError(
+                f"Skin generation produced no output at {skinned_output}\n"
+                f"stdout: {result.stdout}\nstderr: {result.stderr}"
             )
 
         timings["skin_generation"] = time.time() - start_time
-        print(f"  Skin weights generated in {timings['skin_generation']:.2f}s")
+        size_kb = skinned_output.stat().st_size / 1024
+        print(f"  Skin weights generated in {timings['skin_generation']:.2f}s ({size_kb:.0f}KB)")
 
         # Stage 3: Merge skinned result with original mesh
         print("Stage 3: Merging to final output...")
         start_time = time.time()
 
+        output_fbx = Path(output_fbx_path)
         merge_cmd = [
             "bash", "launch/inference/merge.sh",
             "--source", str(skinned_output),
             "--target", str(input_mesh),
-            "--output", str(output_fbx_path),
+            "--output", str(output_fbx),
         ]
 
         result = subprocess.run(
@@ -191,11 +206,18 @@ def run_unirig_pipeline(input_glb_path: str, output_fbx_path: str, seed: int = 1
 
         if result.returncode != 0:
             raise RuntimeError(
-                f"Merge failed:\nstderr: {result.stderr}\nstdout: {result.stdout}"
+                f"Merge failed (rc={result.returncode}):\n"
+                f"stderr: {result.stderr}\nstdout: {result.stdout}"
+            )
+        if not output_fbx.exists():
+            raise RuntimeError(
+                f"Merge produced no output at {output_fbx}\n"
+                f"stdout: {result.stdout}\nstderr: {result.stderr}"
             )
 
         timings["merge"] = time.time() - start_time
-        print(f"  Merged in {timings['merge']:.2f}s")
+        size_kb = output_fbx.stat().st_size / 1024
+        print(f"  Merged in {timings['merge']:.2f}s ({size_kb:.0f}KB)")
 
     return timings
 
