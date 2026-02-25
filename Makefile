@@ -1,4 +1,4 @@
-.PHONY: addon rigmaker clean
+.PHONY: addon rigmaker animmaker clean
 
 addon: ## Package the Blender addon as charmaker.zip
 	rm -f charmaker.zip
@@ -12,5 +12,10 @@ rigmaker: ## Package the RigMaker addon as rigmaker.zip
 	zip -r rigmaker.zip rigmaker/ -x 'rigmaker/__pycache__/*'
 	@echo "Created rigmaker.zip — install via Blender Preferences → Add-ons → Install"
 
+animmaker: ## Package the AnimMaker addon as animmaker.zip
+	rm -f animmaker.zip
+	zip -r animmaker.zip animmaker/ -x 'animmaker/__pycache__/*'
+	@echo "Created animmaker.zip — install via Blender Preferences → Add-ons → Install"
+
 clean: ## Remove build artifacts
-	rm -f charmaker.zip rigmaker.zip
+	rm -f charmaker.zip rigmaker.zip animmaker.zip
