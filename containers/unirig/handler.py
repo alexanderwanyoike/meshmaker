@@ -10,6 +10,10 @@ UniRig inference pipeline:
 """
 
 import os
+
+# Force OSMesa for headless OpenGL before anything imports pyrender/OpenGL
+os.environ["PYOPENGL_PLATFORM"] = "osmesa"
+
 import sys
 import base64
 import tempfile
@@ -107,6 +111,10 @@ def run_unirig_inference(input_glb_path: str, output_fbx_path: str, seed: int = 
     timings = {}
     os.chdir(UNIRIG_DIR)
 
+    # Ensure subprocesses get the OSMesa setting for headless pyrender
+    env = os.environ.copy()
+    env["PYOPENGL_PLATFORM"] = "osmesa"
+
     # Create temp directory for intermediate files
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir)
@@ -135,6 +143,7 @@ def run_unirig_inference(input_glb_path: str, output_fbx_path: str, seed: int = 
             capture_output=True,
             text=True,
             cwd=UNIRIG_DIR,
+            env=env,
         )
 
         if result.returncode != 0:
@@ -168,6 +177,7 @@ def run_unirig_inference(input_glb_path: str, output_fbx_path: str, seed: int = 
             capture_output=True,
             text=True,
             cwd=UNIRIG_DIR,
+            env=env,
         )
 
         if result.returncode != 0:
