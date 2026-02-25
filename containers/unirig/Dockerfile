@@ -31,11 +31,13 @@ WORKDIR /app
 RUN git clone https://github.com/VAST-AI-Research/UniRig.git /app/unirig
 
 # Install UniRig requirements
-# Do NOT use --ignore-installed: it causes pip to reinstall torch (pulled by
-# pytorch_lightning/lightning), upgrading past 2.4.0 and breaking the ABI for
-# pre-built torch_scatter/torch_cluster wheels.
+# --ignore-installed is needed because the base image has distutils-installed
+# packages (blinker) that pip can't uninstall cleanly. Pin torch to the base
+# image version so pytorch_lightning/lightning don't upgrade it and break the
+# ABI for pre-built torch_scatter/torch_cluster wheels.
 WORKDIR /app/unirig
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --ignore-installed -r requirements.txt \
+    "torch==2.4.0+cu124" --extra-index-url https://download.pytorch.org/whl/cu124
 
 # Install CUDA-specific packages for cu124
 # - spconv-cu124: sparse convolutions for point cloud processing
