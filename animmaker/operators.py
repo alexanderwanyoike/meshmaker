@@ -1,5 +1,8 @@
 """Blender operators for AnimMaker."""
 
+import base64
+import os
+import tempfile
 import threading
 import time
 
@@ -7,7 +10,7 @@ import bpy
 from bpy.props import FloatProperty, IntProperty, StringProperty
 from bpy.types import Operator
 
-from . import api, retarget
+from . import api
 
 
 class ANIMMAKER_OT_animate(Operator):
@@ -39,8 +42,8 @@ class ANIMMAKER_OT_animate(Operator):
             self.report({'ERROR'}, "Select an armature first.")
             return {'CANCELLED'}
 
-        if "bone_0" not in obj.data.bones:
-            self.report({'ERROR'}, "Selected armature is not a UniRig armature (no bone_0).")
+        if "mixamorig:Hips" not in obj.data.bones:
+            self.report({'ERROR'}, "Not a Mixamo armature (no mixamorig:Hips).")
             return {'CANCELLED'}
 
         wm = context.window_manager
@@ -54,8 +57,30 @@ class ANIMMAKER_OT_animate(Operator):
         seed = wm.animmaker_seed
         guidance = wm.animmaker_guidance
 
+        # Export armature + its mesh children as FBX for server-side retargeting
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        for child in obj.children:
+            if child.type == 'MESH':
+                child.select_set(True)
+
+        tmp_fbx = tempfile.NamedTemporaryFile(suffix=".fbx", delete=False)
+        tmp_fbx.close()
+        try:
+            bpy.ops.export_scene.fbx(
+                filepath=tmp_fbx.name,
+                use_selection=True,
+                bake_anim=False,
+            )
+            with open(tmp_fbx.name, "rb") as f:
+                character_fbx_b64 = base64.b64encode(f.read()).decode("utf-8")
+        finally:
+            if os.path.exists(tmp_fbx.name):
+                os.unlink(tmp_fbx.name)
+
         payload_input = {
             "prompt": prompt,
+            "character_fbx": character_fbx_b64,
             "duration": duration,
             "fps": fps,
             "guidance_scale": guidance,
@@ -117,25 +142,38 @@ class ANIMMAKER_OT_animate(Operator):
             self.report({'ERROR'}, "Empty response from HY-Motion")
             return {'CANCELLED'}
 
-        # Look up armature by name
-        armature = bpy.data.objects.get(cls._armature_name)
-        if armature is None:
-            wm.animmaker_status = "Error: armature deleted"
-            self.report({'ERROR'}, "Armature was deleted during processing")
+        # Extract animated FBX from server-side retarget result
+        animated_fbx_b64 = result.get("animated_fbx")
+        if not animated_fbx_b64:
+            wm.animmaker_status = "Error: no animated_fbx in response"
+            self.report({'ERROR'}, "No animated FBX in response")
             return {'CANCELLED'}
 
-        # Apply motion
+        # Import animated FBX into scene
+        fbx_bytes = base64.b64decode(animated_fbx_b64)
+        tmp = tempfile.NamedTemporaryFile(suffix=".fbx", delete=False)
+        tmp.write(fbx_bytes)
+        tmp.close()
         try:
-            num_frames = retarget.apply_motion(armature, result)
-        except Exception as e:
-            wm.animmaker_status = f"Error: {str(e)[:60]}"
-            self.report({'ERROR'}, f"Failed to apply motion: {e}")
-            return {'CANCELLED'}
+            bpy.ops.import_scene.fbx(filepath=tmp.name)
+        finally:
+            os.unlink(tmp.name)
+
+        # Set scene frame range from metadata
+        metadata = result.get("metadata", {})
+        num_frames = metadata.get("num_frames", 0)
+        fps = metadata.get("fps", 30)
+        if num_frames:
+            scene = context.scene
+            scene.render.fps = fps
+            scene.frame_start = 1
+            scene.frame_end = num_frames
+            scene.frame_current = 1
 
         elapsed = time.monotonic() - cls._start_time
-        seed_val = result.get("metadata", {}).get("seed", "n/a")
+        seed_val = metadata.get("seed", "n/a")
         wm.animmaker_status = f"Done ({num_frames} frames, {elapsed:.0f}s, seed={seed_val})"
-        self.report({'INFO'}, f"Animation applied: {num_frames} frames")
+        self.report({'INFO'}, f"Animation imported: {num_frames} frames")
 
         return {'FINISHED'}
 

@@ -1,4 +1,4 @@
-.PHONY: addon rigmaker animmaker clean
+.PHONY: addon rigmaker animmaker mia clean
 
 addon: ## Package the Blender addon as charmaker.zip
 	rm -f charmaker.zip
@@ -16,6 +16,10 @@ animmaker: ## Package the AnimMaker addon as animmaker.zip
 	rm -f animmaker.zip
 	zip -r animmaker.zip animmaker/ -x 'animmaker/__pycache__/*'
 	@echo "Created animmaker.zip — install via Blender Preferences → Add-ons → Install"
+
+mia: ## Build MIA Docker image locally
+	docker build -t mia containers/mia/
+	@echo "Built mia image — deploy via GitHub Actions or push manually"
 
 clean: ## Remove build artifacts
 	rm -f charmaker.zip rigmaker.zip animmaker.zip

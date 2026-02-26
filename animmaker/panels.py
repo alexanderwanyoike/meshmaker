@@ -38,14 +38,14 @@ class ANIMMAKER_PT_main(Panel):
         # Selected armature info
         obj = context.active_object
         is_armature = obj is not None and obj.type == 'ARMATURE'
-        is_unirig = is_armature and "bone_0" in obj.data.bones
+        is_mixamo = is_armature and "mixamorig:Hips" in obj.data.bones
 
-        if is_unirig:
+        if is_mixamo:
             box = layout.box()
             box.label(text=obj.name, icon='ARMATURE_DATA')
             box.label(text=f"Bones: {len(obj.data.bones)}")
         elif is_armature:
-            layout.label(text="Not a UniRig armature (no bone_0)", icon='ERROR')
+            layout.label(text="Not a Mixamo armature (no mixamorig:Hips)", icon='ERROR')
         else:
             layout.label(text="No armature selected", icon='ERROR')
 
@@ -66,7 +66,7 @@ class ANIMMAKER_PT_main(Panel):
         row = layout.row(align=True)
         row.scale_y = 1.5
         has_prompt = bool(wm.animmaker_prompt.strip())
-        row.enabled = not busy and not missing and is_unirig and has_prompt
+        row.enabled = not busy and not missing and is_mixamo and has_prompt
         row.operator(
             "animmaker.animate",
             text="Generating..." if busy else "Animate",

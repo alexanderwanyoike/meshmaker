@@ -4,7 +4,7 @@ bl_info = {
     "version": (0, 1, 0),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > RigMaker",
-    "description": "Auto-rig meshes with UniRig on RunPod",
+    "description": "Auto-rig meshes via Make It Animatable on RunPod",
     "category": "3D View",
 }
 

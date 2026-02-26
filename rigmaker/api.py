@@ -1,4 +1,4 @@
-"""API client for RunPod (UniRig)."""
+"""API client for RunPod."""
 
 import json
 import time

@@ -13,18 +13,8 @@ from bpy.types import Operator
 from . import api
 
 
-def _bbox_height(obj):
-    """World-space bounding box height of an object."""
-    coords = [obj.matrix_world @ obj.data.vertices[v].co
-              for v in range(len(obj.data.vertices))]
-    if not coords:
-        return 1.0
-    zs = [c.z for c in coords]
-    return max(zs) - min(zs)
-
-
 def _apply_rig(context, fbx_bytes, original_obj):
-    """Import UniRig FBX, scale armature to match original mesh, transfer weights."""
+    """Import MIA FBX (Mixamo skeleton + correct weights), hide original mesh."""
     existing = set(bpy.data.objects)
 
     # Write FBX to temp file and import
@@ -37,85 +27,30 @@ def _apply_rig(context, fbx_bytes, original_obj):
         if os.path.exists(tmp.name):
             os.unlink(tmp.name)
 
-    # Find new objects
     new_objects = set(bpy.data.objects) - existing
     if not new_objects:
         raise RuntimeError("FBX import produced no objects")
 
-    armature = None
-    rigged_mesh = None
-    for obj in new_objects:
-        if obj.type == 'ARMATURE':
-            armature = obj
-        elif obj.type == 'MESH':
-            rigged_mesh = obj
-
+    armature = next((o for o in new_objects if o.type == 'ARMATURE'), None)
     if armature is None:
-        for obj in new_objects:
-            bpy.data.objects.remove(obj, do_unlink=True)
-        raise RuntimeError("No armature found in FBX")
+        for o in new_objects:
+            bpy.data.objects.remove(o, do_unlink=True)
+        raise RuntimeError("No armature in FBX")
 
-    # Scale armature (and UniRig mesh) to match the original mesh's height.
-    # UniRig normalises inputs to a standard human scale internally, so its
-    # output is always larger than the source mesh.
-    if rigged_mesh:
-        src_h = _bbox_height(rigged_mesh)
-        dst_h = _bbox_height(original_obj)
-        if src_h > 1e-6:
-            s = dst_h / src_h
-            armature.scale = (s, s, s)
-            rigged_mesh.scale = (s, s, s)
+    # MIA's output mesh has correct scale and weights — hide original
+    original_obj.hide_set(True)
+    original_obj.hide_render = True
 
-        # Apply scale so transforms are clean before weight transfer
-        bpy.ops.object.select_all(action='DESELECT')
-        armature.select_set(True)
-        rigged_mesh.select_set(True)
-        context.view_layer.objects.active = armature
-        bpy.ops.object.transform_apply(scale=True)
-
-    # Parent original mesh to armature
-    original_obj.parent = armature
-    original_obj.matrix_parent_inverse = armature.matrix_world.inverted()
-
-    # Add armature modifier
-    arm_mod = original_obj.modifiers.new(name="Armature", type='ARMATURE')
-    arm_mod.object = armature
-
-    # Transfer vertex groups (skin weights) from UniRig mesh to original
-    if rigged_mesh:
-        for vg in rigged_mesh.vertex_groups:
-            if vg.name not in original_obj.vertex_groups:
-                original_obj.vertex_groups.new(name=vg.name)
-
-        dt_mod = original_obj.modifiers.new(name="WeightTransfer", type='DATA_TRANSFER')
-        dt_mod.object = rigged_mesh
-        dt_mod.use_vert_data = True
-        dt_mod.data_types_verts = {'VGROUP_WEIGHTS'}
-        dt_mod.vert_mapping = 'NEAREST'
-
-        with context.temp_override(object=original_obj):
-            bpy.ops.object.modifier_apply(modifier=dt_mod.name)
-
-    # Delete UniRig's decimated mesh — we only needed it for weights + scale
-    if rigged_mesh:
-        mesh_data = rigged_mesh.data
-        bpy.data.objects.remove(rigged_mesh, do_unlink=True)
-        if mesh_data.users == 0:
-            bpy.data.meshes.remove(mesh_data)
-
-    # Select original mesh + armature
     bpy.ops.object.select_all(action='DESELECT')
-    original_obj.select_set(True)
     armature.select_set(True)
-    context.view_layer.objects.active = original_obj
-
+    context.view_layer.objects.active = armature
     return armature
 
 
 class RIGMAKER_OT_auto_rig(Operator):
     bl_idname = "rigmaker.auto_rig"
     bl_label = "Auto Rig"
-    bl_description = "Send mesh to UniRig for automatic rigging"
+    bl_description = "Send mesh to Make It Animatable for automatic Mixamo rigging"
 
     _thread = None
     _result = None
@@ -127,13 +62,13 @@ class RIGMAKER_OT_auto_rig(Operator):
     def execute(self, context):
         prefs = context.preferences.addons[__package__].preferences
         api_key = prefs.runpod_api_key
-        endpoint_id = prefs.unirig_endpoint_id
+        endpoint_id = prefs.mia_endpoint_id
 
         if not api_key:
             self.report({'ERROR'}, "RunPod API key not set. Check addon preferences.")
             return {'CANCELLED'}
         if not endpoint_id:
-            self.report({'ERROR'}, "UniRig endpoint ID not set. Check addon preferences.")
+            self.report({'ERROR'}, "MIA endpoint ID not set. Check addon preferences.")
             return {'CANCELLED'}
 
         obj = context.active_object

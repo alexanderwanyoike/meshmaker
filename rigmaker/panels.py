@@ -22,7 +22,7 @@ class RIGMAKER_PT_main(Panel):
             return
         prefs = prefs.preferences
 
-        missing = not prefs.runpod_api_key or not prefs.unirig_endpoint_id
+        missing = not prefs.runpod_api_key or not prefs.mia_endpoint_id
 
         if missing:
             layout.label(text="Set RunPod key & endpoint in preferences", icon='INFO')
