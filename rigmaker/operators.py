@@ -13,8 +13,18 @@ from bpy.types import Operator
 from . import api
 
 
+def _bbox_height(obj):
+    """World-space bounding box height of an object."""
+    coords = [obj.matrix_world @ obj.data.vertices[v].co
+              for v in range(len(obj.data.vertices))]
+    if not coords:
+        return 1.0
+    zs = [c.z for c in coords]
+    return max(zs) - min(zs)
+
+
 def _apply_rig(context, fbx_bytes, original_obj):
-    """Import FBX, transfer armature + weights to the original mesh, clean up."""
+    """Import UniRig FBX, scale armature to match original mesh, transfer weights."""
     existing = set(bpy.data.objects)
 
     # Write FBX to temp file and import
@@ -33,22 +43,35 @@ def _apply_rig(context, fbx_bytes, original_obj):
         raise RuntimeError("FBX import produced no objects")
 
     armature = None
-    imported_meshes = []
+    rigged_mesh = None
     for obj in new_objects:
         if obj.type == 'ARMATURE':
             armature = obj
         elif obj.type == 'MESH':
-            imported_meshes.append(obj)
+            rigged_mesh = obj
 
     if armature is None:
-        # Clean up imports before raising
         for obj in new_objects:
             bpy.data.objects.remove(obj, do_unlink=True)
         raise RuntimeError("No armature found in FBX")
 
-    if not imported_meshes:
-        # Armature but no mesh to transfer from — still parent the armature
-        pass
+    # Scale armature (and UniRig mesh) to match the original mesh's height.
+    # UniRig normalises inputs to a standard human scale internally, so its
+    # output is always larger than the source mesh.
+    if rigged_mesh:
+        src_h = _bbox_height(rigged_mesh)
+        dst_h = _bbox_height(original_obj)
+        if src_h > 1e-6:
+            s = dst_h / src_h
+            armature.scale = (s, s, s)
+            rigged_mesh.scale = (s, s, s)
+
+        # Apply scale so transforms are clean before weight transfer
+        bpy.ops.object.select_all(action='DESELECT')
+        armature.select_set(True)
+        rigged_mesh.select_set(True)
+        context.view_layer.objects.active = armature
+        bpy.ops.object.transform_apply(scale=True)
 
     # Parent original mesh to armature
     original_obj.parent = armature
@@ -58,36 +81,27 @@ def _apply_rig(context, fbx_bytes, original_obj):
     arm_mod = original_obj.modifiers.new(name="Armature", type='ARMATURE')
     arm_mod.object = armature
 
-    # Transfer vertex groups from imported mesh
-    if imported_meshes:
-        source_mesh = imported_meshes[0]
-
-        # Create matching vertex groups on original mesh
-        for vg in source_mesh.vertex_groups:
+    # Transfer vertex groups (skin weights) from UniRig mesh to original
+    if rigged_mesh:
+        for vg in rigged_mesh.vertex_groups:
             if vg.name not in original_obj.vertex_groups:
                 original_obj.vertex_groups.new(name=vg.name)
 
-        # Data transfer modifier for weights
         dt_mod = original_obj.modifiers.new(name="WeightTransfer", type='DATA_TRANSFER')
-        dt_mod.object = source_mesh
+        dt_mod.object = rigged_mesh
         dt_mod.use_vert_data = True
         dt_mod.data_types_verts = {'VGROUP_WEIGHTS'}
         dt_mod.vert_mapping = 'NEAREST'
 
-        # Apply the data transfer modifier
         with context.temp_override(object=original_obj):
             bpy.ops.object.modifier_apply(modifier=dt_mod.name)
 
-    # Clean up imported meshes (keep armature only)
-    meshdata_to_remove = []
-    for obj in imported_meshes:
-        if obj.data:
-            meshdata_to_remove.append(obj.data)
-        bpy.data.objects.remove(obj, do_unlink=True)
-
-    for md in meshdata_to_remove:
-        if md.users == 0:
-            bpy.data.meshes.remove(md)
+    # Delete UniRig's decimated mesh — we only needed it for weights + scale
+    if rigged_mesh:
+        mesh_data = rigged_mesh.data
+        bpy.data.objects.remove(rigged_mesh, do_unlink=True)
+        if mesh_data.users == 0:
+            bpy.data.meshes.remove(mesh_data)
 
     # Select original mesh + armature
     bpy.ops.object.select_all(action='DESELECT')
