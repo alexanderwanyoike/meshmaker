@@ -1,12 +1,13 @@
 """
 RunPod Serverless Handler for Make It Animatable (MIA)
 
-Inference: GLB mesh -> FBX with Mixamo skeleton + skin weights
-Mirrors MIA's app.py inference pipeline with PCAE models.
+Inference: GLB mesh -> FBX with Mixamo skeleton + skin weights.
+Calls MIA's app.py pipeline functions directly.
 """
 
 import os
 import sys
+import shutil
 import base64
 import tempfile
 import time
@@ -15,22 +16,33 @@ import runpod
 
 MIA_DIR = "/app/mia"
 VOLUME_PATH = os.environ.get("VOLUME_PATH", "/runpod-volume")
-MODEL_DIR = os.path.join(VOLUME_PATH, "mia_models")
 HF_REPO_ID = "jasongzy/Make-It-Animatable"
 
-# Add MIA source to path so its modules are importable
+# Must be set before importing MIA modules — init_models() relies on cwd
+os.chdir(MIA_DIR)
 sys.path.insert(0, MIA_DIR)
 
-_models = None
+_initialized = False
+
+
+def setup_model_symlink():
+    """Symlink /app/mia/output -> network volume so checkpoints persist."""
+    volume_output = os.path.join(VOLUME_PATH, "mia_models", "output")
+    os.makedirs(os.path.join(volume_output, "best", "new"), exist_ok=True)
+
+    mia_output = os.path.join(MIA_DIR, "output")
+    if os.path.exists(mia_output) and not os.path.islink(mia_output):
+        shutil.rmtree(mia_output)
+    if not os.path.exists(mia_output):
+        os.symlink(volume_output, mia_output)
+        print(f"Symlinked {mia_output} -> {volume_output}")
 
 
 def download_models():
     """Download MIA checkpoints from HuggingFace to network volume if missing."""
     from huggingface_hub import hf_hub_download
 
-    ckpt_dir = os.path.join(MODEL_DIR, "output", "best", "new")
-    os.makedirs(ckpt_dir, exist_ok=True)
-
+    ckpt_dir = os.path.join(VOLUME_PATH, "mia_models", "output", "best", "new")
     checkpoints = ["bw.pth", "bw_normal.pth", "joints.pth", "joints_coarse.pth", "pose.pth"]
     for ckpt in checkpoints:
         dest = os.path.join(ckpt_dir, ckpt)
@@ -42,121 +54,21 @@ def download_models():
                 local_dir=ckpt_dir,
                 local_dir_use_symlinks=False,
             )
-
-    print(f"All MIA checkpoints available at {ckpt_dir}")
-    return ckpt_dir
+    print("All MIA checkpoints ready.")
 
 
 def load_models():
-    """Load all 5 MIA PCAE models to GPU."""
-    global _models
-    if _models is not None:
-        return _models
+    global _initialized
+    if _initialized:
+        return
 
-    print("Loading MIA models...")
-    import torch
+    setup_model_symlink()
+    download_models()
 
-    ckpt_dir = download_models()
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    # Import model factory from MIA source
-    from src.models import get_bw_model, get_joints_model, get_pose_model
-
-    def load_ckpt(path, loader_fn):
-        print(f"  Loading {os.path.basename(path)}...")
-        ckpt = torch.load(path, map_location=device)
-        model = loader_fn(ckpt.get("cfg", {}))
-        model.load_state_dict(ckpt.get("model_state_dict", ckpt))
-        model.to(device)
-        model.eval()
-        return model
-
-    _models = {
-        "bw": load_ckpt(os.path.join(ckpt_dir, "bw.pth"), get_bw_model),
-        "bw_normal": load_ckpt(os.path.join(ckpt_dir, "bw_normal.pth"), get_bw_model),
-        "joints": load_ckpt(os.path.join(ckpt_dir, "joints.pth"), get_joints_model),
-        "coarse": load_ckpt(os.path.join(ckpt_dir, "joints_coarse.pth"), get_joints_model),
-        "pose": load_ckpt(os.path.join(ckpt_dir, "pose.pth"), get_pose_model),
-        "device": device,
-    }
-
-    print(f"MIA models loaded on {device}")
-    return _models
-
-
-def run_inference(glb_path):
-    """
-    Run the full MIA inference pipeline on a GLB mesh.
-
-    Pipeline (mirrors app.py):
-      1. Load mesh → sample 32k point cloud
-      2. Normalise point cloud
-      3. model_coarse  → coarse joint positions
-      4. model_bw + model_bw_normal → blend weights
-      5. model_joints  → refined joint positions
-      6. model_pose    → pose transforms
-      7. bw_post_process → anatomical constraints + sparsification
-
-    Returns:
-        (mesh, joints_world, bw_final)
-    """
-    import torch
-    import trimesh
-    from src.utils import sample_mesh, get_normalize_transform, bw_post_process
-
-    models = load_models()
-    device = models["device"]
-
-    # Load mesh — handle Scene (multi-mesh GLB) by concatenating
-    print(f"Loading mesh: {glb_path}")
-    scene = trimesh.load(glb_path)
-    if isinstance(scene, trimesh.Scene):
-        mesh = scene.dump(concatenate=True)
-    else:
-        mesh = scene
-
-    # Sample point cloud with normals
-    print("Sampling point cloud (32768 points)...")
-    pc, pc_normals = sample_mesh(mesh, 32768)
-
-    # Normalise to unit sphere
-    transform = get_normalize_transform(mesh)
-    pc_norm = (pc - transform["center"]) / transform["scale"]
-
-    pc_t = torch.from_numpy(pc_norm).float().unsqueeze(0).to(device)
-    pc_normals_t = torch.from_numpy(pc_normals).float().unsqueeze(0).to(device)
-
-    print("Running PCAE inference...")
-    with torch.no_grad():
-        # Coarse joint estimation
-        coarse_joints = models["coarse"](pc_t)
-
-        # Blend weight prediction (geometry + normal streams)
-        bw = models["bw"](pc_t, coarse_joints)
-        bw_normal = models["bw_normal"](pc_t, pc_normals_t, coarse_joints)
-
-        # Refined joint estimation
-        joints = models["joints"](pc_t, coarse_joints)
-
-        # Pose transforms
-        models["pose"](pc_t, joints)
-
-    # Post-process: anatomical constraints + sparsification
-    bw_final = bw_post_process(bw.cpu().numpy()[0], bw_normal.cpu().numpy()[0])
-
-    # Un-normalise joints back to mesh space
-    joints_np = joints.cpu().numpy()[0]
-    joints_world = joints_np * transform["scale"] + transform["center"]
-
-    return mesh, joints_world, bw_final
-
-
-def export_fbx(mesh, joints, bw, output_path):
-    """Export rigged mesh as FBX with Mixamo bone names using bpy."""
-    # MIA's vis_blender function creates a Blender scene with the armature
-    # (mixamorig:* bone names) and exports as FBX
-    from src.vis_blender import vis_blender
-    vis_blender(mesh, joints, bw, output_path)
+    from app import init_models
+    init_models()
+    _initialized = True
+    print("MIA models loaded!")
 
 
 def handler(job: dict) -> dict:
@@ -167,38 +79,70 @@ def handler(job: dict) -> dict:
     if not mesh_b64:
         return {"error": "Missing required field: mesh (base64 encoded GLB)"}
 
+    no_fingers = job_input.get("no_fingers", False)
+    rest_pose_type = job_input.get("rest_pose", None)
+
     try:
+        load_models()
         start_time = time.time()
 
-        # Decode input mesh
-        with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as f:
+        from app import prepare_input, preprocess, infer, vis, vis_blender, finish, DB
+
+        with tempfile.NamedTemporaryFile(suffix=".glb", delete=False, dir="/tmp") as f:
             f.write(base64.b64decode(mesh_b64))
             glb_path = f.name
 
-        output_path = tempfile.mktemp(suffix=".fbx")
-
+        db = DB()
         try:
-            mesh, joints, bw = run_inference(glb_path)
-            export_fbx(mesh, joints, bw, output_path)
+            print("Stage 1: prepare_input")
+            prepare_input(glb_path, is_gs=False, opacity_threshold=0.0, db=db, export_temp=True)
 
-            with open(output_path, "rb") as f:
+            print("Stage 2: preprocess")
+            preprocess(db)
+
+            print("Stage 3: infer")
+            infer(input_normal=False, db=db)
+
+            print("Stage 4: vis")
+            vis(bw_fix=True, bw_vis_bone="LeftArm", no_fingers=no_fingers, db=db)
+
+            print("Stage 5: vis_blender (FBX export)")
+            vis_blender(
+                reset_to_rest=False,
+                no_fingers=no_fingers,
+                rest_pose_type=rest_pose_type,
+                ignore_pose_parts=None,
+                animation_file=None,
+                retarget=True,
+                inplace=True,
+                db=db,
+            )
+
+            finish(db=None)
+
+            if not db.anim_path or not os.path.exists(db.anim_path):
+                return {"error": f"Pipeline finished but no FBX found at {db.anim_path}"}
+
+            with open(db.anim_path, "rb") as f:
                 fbx_b64 = base64.b64encode(f.read()).decode("utf-8")
 
+            bone_count = int(db.joints.shape[0]) if db.joints is not None else 0
             processing_time = time.time() - start_time
-            print(f"MIA inference complete in {processing_time:.2f}s, {len(joints)} bones")
+            print(f"Done in {processing_time:.2f}s, {bone_count} bones -> {db.anim_path}")
 
             return {
                 "output": fbx_b64,
                 "format": "fbx",
                 "processing_time": processing_time,
-                "bone_count": len(joints),
+                "bone_count": bone_count,
             }
 
         finally:
             if os.path.exists(glb_path):
                 os.unlink(glb_path)
-            if os.path.exists(output_path):
-                os.unlink(output_path)
+            # Clean up MIA's temp output dir
+            if db.output_dir and os.path.exists(db.output_dir):
+                shutil.rmtree(db.output_dir, ignore_errors=True)
 
     except Exception as e:
         import traceback
@@ -212,10 +156,9 @@ def handler(job: dict) -> dict:
 print("Initializing MIA handler...")
 try:
     load_models()
-    print("MIA models loaded successfully!")
+    print("MIA ready!")
 except Exception as e:
     print(f"Warning: Model pre-loading failed: {e}")
     print("Models will be loaded on first request.")
 
-# Start RunPod serverless
 runpod.serverless.start({"handler": handler})
