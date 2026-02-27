@@ -42,16 +42,19 @@ def download_models():
     """Download MIA checkpoints from HuggingFace to network volume if missing."""
     from huggingface_hub import hf_hub_download
 
+    # Checkpoints live at output/best/new/ inside the HF repo
     ckpt_dir = os.path.join(VOLUME_PATH, "mia_models", "output", "best", "new")
+    os.makedirs(ckpt_dir, exist_ok=True)
     checkpoints = ["bw.pth", "bw_normal.pth", "joints.pth", "joints_coarse.pth", "pose.pth"]
     for ckpt in checkpoints:
         dest = os.path.join(ckpt_dir, ckpt)
         if not os.path.exists(dest):
-            print(f"Downloading {ckpt}...")
+            hf_path = f"output/best/new/{ckpt}"
+            print(f"Downloading {hf_path}...")
             hf_hub_download(
                 repo_id=HF_REPO_ID,
-                filename=ckpt,
-                local_dir=ckpt_dir,
+                filename=hf_path,
+                local_dir=os.path.join(VOLUME_PATH, "mia_models"),
                 local_dir_use_symlinks=False,
             )
     print("All MIA checkpoints ready.")
