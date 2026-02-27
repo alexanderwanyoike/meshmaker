@@ -61,6 +61,9 @@ def _make_mock():
         sys.modules[f"gradio.{sub}"] = mod
         setattr(gr, sub, mod)
 
+    # Catch-all: any gr.XYZ not explicitly defined returns a stub
+    gr.__getattr__ = lambda name: _stub(name)
+
     return gr
 
 
