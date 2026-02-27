@@ -40,6 +40,11 @@ RUN grep -v "^pytorch3d" requirements.txt > /tmp/requirements_no_p3d.txt && \
 
 RUN pip install --no-cache-dir runpod>=1.6.0 huggingface_hub
 
+# Generate Mixamo template skeleton — required by dataset_mixamo.py at import time.
+# bones.fbx is not shipped with MIA; we create it from the known 52-bone hierarchy.
+COPY create_bones_fbx.py /tmp/create_bones_fbx.py
+RUN python /tmp/create_bones_fbx.py
+
 COPY handler.py /app/handler.py
 WORKDIR /app
 CMD ["python", "-u", "handler.py"]
