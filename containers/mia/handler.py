@@ -89,7 +89,12 @@ def handler(job: dict) -> dict:
         load_models()
         start_time = time.time()
 
+        import app as mia_app
         from app import prepare_input, preprocess, infer, vis, vis_blender, finish, DB
+        # MIA stage functions return {state: db} for Gradio — mock state so they
+        # don't NameError when called outside a Gradio interface
+        if not hasattr(mia_app, "state"):
+            mia_app.state = "state"
 
         with tempfile.NamedTemporaryFile(suffix=".glb", delete=False, dir="/tmp") as f:
             f.write(base64.b64decode(mesh_b64))
