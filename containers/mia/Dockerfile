@@ -44,14 +44,8 @@ RUN pip install --no-cache-dir runpod>=1.6.0 huggingface_hub
 # dataset_mixamo.py requires data/Mixamo/bones.fbx at import time to build
 # KINEMATIC_TREE. "Standard Run.fbx" is a real Mixamo file with the correct
 # 52-bone mixamorig: skeleton — use it as the template.
-RUN python -c "
-import os, shutil
-from huggingface_hub import hf_hub_download
-src = hf_hub_download('jasongzy/Make-It-Animatable', 'data/Standard Run.fbx', local_dir='/tmp/mia_data')
-os.makedirs('/app/mia/data/Mixamo', exist_ok=True)
-shutil.copy(src, '/app/mia/data/Mixamo/bones.fbx')
-print('bones.fbx ready')
-"
+COPY get_bones_fbx.py /tmp/get_bones_fbx.py
+RUN python /tmp/get_bones_fbx.py
 
 COPY handler.py /app/handler.py
 WORKDIR /app
