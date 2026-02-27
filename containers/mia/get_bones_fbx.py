@@ -1,6 +1,10 @@
 """
-Download Standard Run.fbx from MIA's HuggingFace repo and copy it to
-data/Mixamo/bones.fbx — required by dataset_mixamo.py at import time.
+Download Standard Run.fbx from MIA's HuggingFace repo and place it at:
+  - data/Mixamo/bones.fbx       (required by dataset_mixamo.py)
+  - data/Mixamo/bones_vroid.fbx (required by dataset_mixamo_additional.py)
+
+Both are needed at import time. ADDITIONAL_BONES=False in init_models()
+so the vroid path is never used for inference, but the import still runs.
 """
 import os
 import shutil
@@ -15,4 +19,5 @@ src = hf_hub_download(
 
 os.makedirs("/app/mia/data/Mixamo", exist_ok=True)
 shutil.copy(src, "/app/mia/data/Mixamo/bones.fbx")
-print("bones.fbx ready")
+shutil.copy(src, "/app/mia/data/Mixamo/bones_vroid.fbx")
+print("bones.fbx and bones_vroid.fbx ready")
