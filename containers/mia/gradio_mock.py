@@ -33,9 +33,15 @@ def _make_mock():
 
     gr.GPU = _gpu
 
-    # Stub UI components as no-op classes
+    # Stub UI components — any attribute access returns a no-op callable
+    # so gr.Checkbox.postprocess, gr.Image.preprocess, etc. all work
     def _stub(name):
-        return type(name, (), {"__init__": lambda self, *a, **k: None})
+        class Stub:
+            def __init__(self, *a, **k): pass
+            def __call__(self, *a, **k): return self
+            def __getattr__(self, n): return lambda *a, **k: None
+        Stub.__name__ = name
+        return Stub
 
     for name in [
         "Blocks", "Row", "Column", "Tab", "Tabs", "Accordion",
