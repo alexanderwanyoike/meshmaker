@@ -6,12 +6,19 @@ FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 ENV PYTHONUNBUFFERED=1
 ENV HF_HOME=/runpod-volume/huggingface
 
-# System deps for mesh loading (trimesh/open3d)
+# System deps for mesh loading (trimesh) + X11 libs required by bpy
 RUN apt-get update && apt-get install -y \
     git \
     git-lfs \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    libxrender1 \
+    libsm6 \
+    libxext6 \
+    libxi6 \
+    libxxf86vm1 \
+    libxfixes3 \
+    libxkbcommon0 \
     && rm -rf /var/lib/apt/lists/* \
     && git lfs install
 
