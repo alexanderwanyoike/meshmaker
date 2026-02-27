@@ -22,8 +22,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && git lfs install
 
-# Clone Make-It-Animatable
-RUN git clone https://github.com/jasongzy/Make-It-Animatable.git /app/mia
+# Clone our fork of Make-It-Animatable (has infer.py — clean inference without Gradio)
+RUN git clone https://github.com/alexanderwanyoike/Make-It-Animatable.git /app/mia
 WORKDIR /app/mia
 
 # Install MIA dependencies
@@ -40,10 +40,8 @@ RUN grep -v "^pytorch3d" requirements.txt > /tmp/requirements_no_p3d.txt && \
 
 RUN pip install --no-cache-dir runpod>=1.6.0 huggingface_hub
 
-# Download Mixamo template skeleton from MIA's own HF repo.
-# dataset_mixamo.py requires data/Mixamo/bones.fbx at import time to build
-# KINEMATIC_TREE. "Standard Run.fbx" is a real Mixamo file with the correct
-# 52-bone mixamorig: skeleton — use it as the template.
+# Download Mixamo template skeleton from MIA's HF repo.
+# dataset_mixamo.py requires data/Mixamo/bones.fbx at import time.
 COPY get_bones_fbx.py /tmp/get_bones_fbx.py
 RUN python /tmp/get_bones_fbx.py
 
@@ -51,7 +49,6 @@ RUN python /tmp/get_bones_fbx.py
 COPY create_vroid_fbx.py /tmp/create_vroid_fbx.py
 RUN python /tmp/create_vroid_fbx.py
 
-COPY gradio_mock.py /app/gradio_mock.py
 COPY handler.py /app/handler.py
 WORKDIR /app
 CMD ["python", "-u", "handler.py"]
