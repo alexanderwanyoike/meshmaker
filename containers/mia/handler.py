@@ -22,6 +22,13 @@ HF_REPO_ID = "jasongzy/Make-It-Animatable"
 os.chdir(MIA_DIR)
 sys.path.insert(0, MIA_DIR)
 
+# Mock Gradio before any MIA import — app.py is a Gradio UI but we only
+# need its inference functions. This prevents import errors and removes
+# the heavyweight Gradio dependency from the inference path.
+sys.path.insert(0, "/app")
+from gradio_mock import install as _install_gradio_mock
+_install_gradio_mock()
+
 _initialized = False
 
 
@@ -89,12 +96,7 @@ def handler(job: dict) -> dict:
         load_models()
         start_time = time.time()
 
-        import app as mia_app
         from app import prepare_input, preprocess, infer, vis, vis_blender, finish, DB
-        # MIA stage functions return {state: db} for Gradio — mock state so they
-        # don't NameError when called outside a Gradio interface
-        if not hasattr(mia_app, "state"):
-            mia_app.state = "state"
 
         with tempfile.NamedTemporaryFile(suffix=".glb", delete=False, dir="/tmp") as f:
             f.write(base64.b64decode(mesh_b64))

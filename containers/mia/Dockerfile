@@ -51,6 +51,7 @@ RUN python /tmp/get_bones_fbx.py
 COPY create_vroid_fbx.py /tmp/create_vroid_fbx.py
 RUN python /tmp/create_vroid_fbx.py
 
+COPY gradio_mock.py /app/gradio_mock.py
 COPY handler.py /app/handler.py
 WORKDIR /app
 CMD ["python", "-u", "handler.py"]
