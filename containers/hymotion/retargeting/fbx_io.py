@@ -78,11 +78,16 @@ def _collect_skeleton_nodes(node: "fbx.FbxNode", bone_dict: dict[str, "fbx.FbxNo
         return
 
     # Check if this node has a skeleton attribute
+    # eSkeleton may not be exposed in all fbxsdk versions — fall through to
+    # the name-based check below if the attribute lookup fails
     attr = node.GetNodeAttribute()
     if attr is not None:
-        attr_type = attr.GetAttributeType()
-        if attr_type == fbxsdk.FbxNodeAttribute.eSkeleton:
-            bone_dict[node.GetName()] = node
+        try:
+            attr_type = attr.GetAttributeType()
+            if attr_type == fbxsdk.FbxNodeAttribute.eSkeleton:
+                bone_dict[node.GetName()] = node
+        except AttributeError:
+            pass
 
     # Also check by name pattern (some FBX files don't have skeleton attributes set)
     name = node.GetName()
