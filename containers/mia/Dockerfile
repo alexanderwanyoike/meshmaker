@@ -47,6 +47,10 @@ RUN pip install --no-cache-dir runpod>=1.6.0 huggingface_hub
 COPY get_bones_fbx.py /tmp/get_bones_fbx.py
 RUN python /tmp/get_bones_fbx.py
 
+# Generate bones_vroid.fbx (59-bone extended skeleton for dataset_mixamo_additional.py)
+COPY create_vroid_fbx.py /tmp/create_vroid_fbx.py
+RUN python /tmp/create_vroid_fbx.py
+
 COPY handler.py /app/handler.py
 WORKDIR /app
 CMD ["python", "-u", "handler.py"]

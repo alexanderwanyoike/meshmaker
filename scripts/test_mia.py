@@ -86,10 +86,19 @@ def submit_and_poll(api_key, endpoint_id, payload, label):
             print(f"  {status}... ({elapsed:.0f}s)")
 
     output = result.get("output", {})
-    if isinstance(output, dict) and "error" in output:
-        print(f"Error from {label}: {output['error']}", file=sys.stderr)
-        if "traceback" in output:
-            print(output["traceback"], file=sys.stderr)
+    # RunPod sometimes hoists "error" to the top-level response
+    top_error = result.get("error")
+    if top_error or (isinstance(output, dict) and "error" in output):
+        err = top_error or output.get("error", "unknown error")
+        print(f"Error from {label}: {err}", file=sys.stderr)
+        tb = output.get("traceback") if isinstance(output, dict) else None
+        if tb:
+            print(tb, file=sys.stderr)
+        sys.exit(1)
+    # Also surface bare traceback-only responses
+    if isinstance(output, dict) and "traceback" in output and not output.get("output"):
+        print(f"Error from {label} (traceback only):", file=sys.stderr)
+        print(output["traceback"], file=sys.stderr)
         sys.exit(1)
 
     return output, time.time() - start_time
