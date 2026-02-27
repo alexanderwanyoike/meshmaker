@@ -148,15 +148,16 @@ def apply_animation_to_fbx(
     import fbx as fbxsdk
 
     num_frames = euler_rotations.shape[0]
+    spf = 1.0 / fps  # seconds per frame
 
     # Create animation stack and layer
     anim_stack = fbxsdk.FbxAnimStack.Create(scene, "MotionStack")
     anim_layer = fbxsdk.FbxAnimLayer.Create(scene, "MotionLayer")
     anim_stack.AddMember(anim_layer)
 
-    # Set up time
+    # Set up time — use SetSecondDouble to avoid FbxTime enum constants
+    # which differ across fbxsdk versions
     time = fbxsdk.FbxTime()
-    time.SetGlobalTimeMode(fbxsdk.FbxTime.eFrames30 if fps == 30 else fbxsdk.FbxTime.eCustom)
 
     # Find the root bone (Hips) for translation
     root_bone_name = None
@@ -182,22 +183,31 @@ def apply_animation_to_fbx(
         curve_rz.KeyModifyBegin()
 
         for frame in range(num_frames):
-            time.SetFrame(frame, fbxsdk.FbxTime.eFrames30)
+            time.SetSecondDouble(frame * spf)
 
             rx, ry, rz = euler_rotations[frame, joint_idx]
 
             # Add rotation keyframes
             key_index = curve_rx.KeyAdd(time)[0]
             curve_rx.KeySetValue(key_index, rx)
-            curve_rx.KeySetInterpolation(key_index, fbxsdk.FbxAnimCurveDef.eInterpolationLinear)
+            try:
+                curve_rx.KeySetInterpolation(key_index, fbxsdk.FbxAnimCurveDef.eInterpolationLinear)
+            except AttributeError:
+                pass
 
             key_index = curve_ry.KeyAdd(time)[0]
             curve_ry.KeySetValue(key_index, ry)
-            curve_ry.KeySetInterpolation(key_index, fbxsdk.FbxAnimCurveDef.eInterpolationLinear)
+            try:
+                curve_ry.KeySetInterpolation(key_index, fbxsdk.FbxAnimCurveDef.eInterpolationLinear)
+            except AttributeError:
+                pass
 
             key_index = curve_rz.KeyAdd(time)[0]
             curve_rz.KeySetValue(key_index, rz)
-            curve_rz.KeySetInterpolation(key_index, fbxsdk.FbxAnimCurveDef.eInterpolationLinear)
+            try:
+                curve_rz.KeySetInterpolation(key_index, fbxsdk.FbxAnimCurveDef.eInterpolationLinear)
+            except AttributeError:
+                pass
 
         curve_rx.KeyModifyEnd()
         curve_ry.KeyModifyEnd()
@@ -214,7 +224,7 @@ def apply_animation_to_fbx(
             curve_tz.KeyModifyBegin()
 
             for frame in range(num_frames):
-                time.SetFrame(frame, fbxsdk.FbxTime.eFrames30)
+                time.SetSecondDouble(frame * spf)
 
                 tx, ty, tz = translations[frame]
                 # Scale translation (SMPL uses meters, FBX typically uses cm)
@@ -222,15 +232,24 @@ def apply_animation_to_fbx(
 
                 key_index = curve_tx.KeyAdd(time)[0]
                 curve_tx.KeySetValue(key_index, tx * scale)
-                curve_tx.KeySetInterpolation(key_index, fbxsdk.FbxAnimCurveDef.eInterpolationLinear)
+                try:
+                    curve_tx.KeySetInterpolation(key_index, fbxsdk.FbxAnimCurveDef.eInterpolationLinear)
+                except AttributeError:
+                    pass
 
                 key_index = curve_ty.KeyAdd(time)[0]
                 curve_ty.KeySetValue(key_index, ty * scale)
-                curve_ty.KeySetInterpolation(key_index, fbxsdk.FbxAnimCurveDef.eInterpolationLinear)
+                try:
+                    curve_ty.KeySetInterpolation(key_index, fbxsdk.FbxAnimCurveDef.eInterpolationLinear)
+                except AttributeError:
+                    pass
 
                 key_index = curve_tz.KeyAdd(time)[0]
                 curve_tz.KeySetValue(key_index, tz * scale)
-                curve_tz.KeySetInterpolation(key_index, fbxsdk.FbxAnimCurveDef.eInterpolationLinear)
+                try:
+                    curve_tz.KeySetInterpolation(key_index, fbxsdk.FbxAnimCurveDef.eInterpolationLinear)
+                except AttributeError:
+                    pass
 
             curve_tx.KeyModifyEnd()
             curve_ty.KeyModifyEnd()
