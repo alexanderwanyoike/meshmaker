@@ -22,9 +22,14 @@ HF_REPO_ID = "jasongzy/Make-It-Animatable"
 os.chdir(MIA_DIR)
 sys.path.insert(0, MIA_DIR)
 
+# Import torch FIRST before the gradio mock and before any MIA module.
+# Without real gradio, app.py's import order loads pytorch3d (cu121) before
+# torch (cu124), causing a CUDA symbol conflict that prevents torch._C from
+# loading. Pre-importing torch ensures it initialises first.
+import torch  # noqa: E402
+
 # Mock Gradio before any MIA import — app.py is a Gradio UI but we only
-# need its inference functions. This prevents import errors and removes
-# the heavyweight Gradio dependency from the inference path.
+# need its inference functions.
 sys.path.insert(0, "/app")
 from gradio_mock import install as _install_gradio_mock
 _install_gradio_mock()
