@@ -2,7 +2,7 @@
 # Inference: GLB mesh -> FBX with Mixamo skeleton + skin weights
 # pytorch3d 0.7.7 requires CUDA 12.1 (not 12.4)
 
-FROM runpod/pytorch:2.1.2-py3.11-cuda12.1.1-devel-ubuntu22.04
+FROM runpod/pytorch:2.1.1-py3.10-cuda12.1.1-devel-ubuntu22.04
 
 ENV PYTHONUNBUFFERED=1
 ENV HF_HOME=/runpod-volume/huggingface
@@ -21,12 +21,12 @@ RUN git clone https://github.com/jasongzy/Make-It-Animatable.git /app/mia
 WORKDIR /app/mia
 
 # Install MIA dependencies
-# pytorch3d 0.7.7 wheel built for pt2.1.2+cu121 from miropsota's builder
+# pytorch3d 0.7.7 wheel built for pt2.1.1+cu121 from miropsota's builder
 # bpy==4.3.0 for headless FBX export
 RUN pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cu121 \
     --extra-index-url https://miropsota.github.io/torch_packages_builder \
-    pytorch3d==0.7.7+pt2.1.2cu121 \
+    pytorch3d==0.7.7+pt2.1.1cu121 \
     -r requirements.txt \
     bpy==4.3.0
 
