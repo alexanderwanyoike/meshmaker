@@ -33,10 +33,13 @@ def _make_mock():
 
     gr.GPU = _gpu
 
-    # Stub UI components — any attribute access returns a no-op callable
-    # so gr.Checkbox.postprocess, gr.Image.preprocess, etc. all work
+    # Stub UI components — handle both class-level (gr.Checkbox.postprocess)
+    # and instance-level attribute access via metaclass + __getattr__
     def _stub(name):
-        class Stub:
+        class StubMeta(type):
+            def __getattr__(cls, n):
+                return lambda *a, **k: None
+        class Stub(metaclass=StubMeta):
             def __init__(self, *a, **k): pass
             def __call__(self, *a, **k): return self
             def __getattr__(self, n): return lambda *a, **k: None
