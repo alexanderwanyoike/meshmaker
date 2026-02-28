@@ -261,7 +261,12 @@ def load_npz(filepath: str) -> Skeleton:
         # Cat: (T, 22, 3, 3) + (T, 15, 3, 3) + (T, 15, 3, 3) -> (T, 52, 3, 3)
         rot_mats_all = np.concatenate([rot_mats_all, l_hand_batch, r_hand_batch], axis=1)
 
-    if rot_mats_all is not None and root_mat is not None:
+    if rot_mats_all is not None:
+        # Derive root rotation from rot6d joint 0 when root_rotations_mat is absent
+        if root_mat is None:
+            print("No root_rotations_mat found, deriving root from rot6d[:, 0]")
+            root_mat = rot_mats_all[:, 0]
+
         for f in range(T):
             # 1. Root (Pelvis)
             world_rots[f, 0] = root_mat[f]
@@ -280,10 +285,10 @@ def load_npz(filepath: str) -> Skeleton:
                         v_parent_seg = global_kps[f, i] - global_kps[f, p]
                         # Vector of current segment
                         v_curr_seg = global_kps[f, child] - global_kps[f, i]
-                        
+
                         # Find rotation that aligns parent segment direction with current segment
                         R_align = solve_rotation_between_vectors(v_parent_seg, v_curr_seg)
-                        
+
                         # Apply this change to the parent's world orientation.
                         # This propagates the curl and spread down the finger chain.
                         world_rots[f, i] = R_align @ world_rots[f, p]
@@ -291,7 +296,7 @@ def load_npz(filepath: str) -> Skeleton:
                         # Finger tip: follow parent
                         world_rots[f, i] = world_rots[f, p]
     else:
-        # Fallback
+        # Fallback: no rotation data at all
         for f in range(T):
             world_rots[f] = rest_world_rots
 
