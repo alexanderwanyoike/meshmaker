@@ -246,6 +246,12 @@ def generate_motion(
             if transl.ndim == 3 and transl.shape[0] == 1:
                 transl = transl[0]
             motion_data["transl"] = transl
+
+        if "root_rotations_mat" in model_output:
+            root_rot = to_numpy(model_output["root_rotations_mat"])
+            if root_rot.ndim == 4 and root_rot.shape[0] == 1:
+                root_rot = root_rot[0]
+            motion_data["root_rotations_mat"] = root_rot
     else:
         # Fallback for unexpected format
         motion_data["motion"] = to_numpy(model_output)

@@ -29,14 +29,15 @@ import requests
 
 
 def decode_numpy_arrays(motion_data: dict) -> dict:
-    """Decode base64-encoded numpy arrays from HyMotion output."""
+    """Decode base64-encoded numpy arrays from HyMotion output.
+
+    Server encodes with np.save() (includes numpy header), so we decode
+    with np.load() rather than np.frombuffer() which expects raw bytes.
+    """
     decoded = {}
     for key, value in motion_data.items():
         if isinstance(value, dict) and "data" in value and "dtype" in value and "shape" in value:
-            arr = np.frombuffer(
-                base64.b64decode(value["data"]),
-                dtype=value["dtype"],
-            ).reshape(value["shape"])
+            arr = np.load(io.BytesIO(base64.b64decode(value["data"])))
             decoded[key] = arr
         elif not isinstance(value, dict):
             # Keep scalar values (fps, duration, num_frames, etc.)
