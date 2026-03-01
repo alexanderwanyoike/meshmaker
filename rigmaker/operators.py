@@ -37,7 +37,16 @@ def _apply_rig(context, fbx_bytes, original_obj):
             bpy.data.objects.remove(o, do_unlink=True)
         raise RuntimeError("No armature in FBX")
 
-    # MIA's output mesh has correct scale and weights — hide original
+    # Apply transforms on all imported objects so scale/rotation
+    # offsets are baked into geometry — prevents multi-part meshes
+    # (e.g. armor pieces) from scattering.
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in new_objects:
+        o.select_set(True)
+    context.view_layer.objects.active = armature
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+
+    # MIA's output mesh has correct weights — hide original
     original_obj.hide_set(True)
     original_obj.hide_render = True
 
@@ -74,6 +83,9 @@ class RIGMAKER_OT_auto_rig(Operator):
         obj = context.active_object
         if obj is None or obj.type != 'MESH':
             self.report({'ERROR'}, "Select a mesh object first.")
+            return {'CANCELLED'}
+        if not obj.select_get():
+            self.report({'ERROR'}, "Mesh is not selected in the viewport.")
             return {'CANCELLED'}
 
         # Export selected mesh as GLB
