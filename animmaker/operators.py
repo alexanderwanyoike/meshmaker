@@ -150,6 +150,7 @@ class ANIMMAKER_OT_animate(Operator):
             return {'CANCELLED'}
 
         # Import animated FBX into scene
+        existing = set(bpy.data.objects)
         fbx_bytes = base64.b64decode(animated_fbx_b64)
         tmp = tempfile.NamedTemporaryFile(suffix=".fbx", delete=False)
         tmp.write(fbx_bytes)
@@ -158,6 +159,29 @@ class ANIMMAKER_OT_animate(Operator):
             bpy.ops.import_scene.fbx(filepath=tmp.name)
         finally:
             os.unlink(tmp.name)
+
+        new_objects = set(bpy.data.objects) - existing
+        if not new_objects:
+            wm.animmaker_status = "Error: FBX import produced no objects"
+            self.report({'ERROR'}, "FBX import produced no objects")
+            return {'CANCELLED'}
+
+        new_armature = next((o for o in new_objects if o.type == 'ARMATURE'), None)
+
+        # Hide original armature + its mesh children
+        original_arm = bpy.data.objects.get(cls._armature_name)
+        if original_arm:
+            original_arm.hide_set(True)
+            original_arm.hide_render = True
+            for child in original_arm.children:
+                child.hide_set(True)
+                child.hide_render = True
+
+        # Select new armature
+        if new_armature:
+            bpy.ops.object.select_all(action='DESELECT')
+            new_armature.select_set(True)
+            context.view_layer.objects.active = new_armature
 
         # Set scene frame range from metadata
         metadata = result.get("metadata", {})

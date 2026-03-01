@@ -134,6 +134,7 @@ class BoneData:
     def __init__(self, name: str):
         self.name = name
         self.parent_name = None
+        self.fbx_parent_node_name = None  # actual FBX parent (may be non-bone like "Armature")
         self.local_matrix = np.eye(4)
         self.world_matrix = np.eye(4)
         self.head: np.ndarray = np.zeros(3)
@@ -722,7 +723,7 @@ def get_fbx_rotation_order_str(node: fbx.FbxNode) -> str:
 # FBX Logic
 # =============================================================================
 
-def collect_skeleton_nodes(node: fbx.FbxNode, skeleton: Skeleton, parent_name: str = None, depth: int = 0, sampling_time: fbx.FbxTime = None):
+def collect_skeleton_nodes(node: fbx.FbxNode, skeleton: Skeleton, parent_name: str = None, depth: int = 0, sampling_time: fbx.FbxTime = None, fbx_parent_name: str = None):
     attr = node.GetNodeAttribute()
     node_name = node.GetName()
     is_bone = False
@@ -777,6 +778,7 @@ def collect_skeleton_nodes(node: fbx.FbxNode, skeleton: Skeleton, parent_name: s
         bone = BoneData(node_name)
         bone.has_skeleton_attr = (attr and attr.GetAttributeType() in [3, 4])
         bone.parent_name = parent_name
+        bone.fbx_parent_node_name = fbx_parent_name
         bone.local_matrix = fbx_matrix_to_numpy(local_mat_fbx)
         bone.world_matrix = fbx_matrix_to_numpy(global_mat_fbx)
         # Use BindPose for head if possible
@@ -805,7 +807,7 @@ def collect_skeleton_nodes(node: fbx.FbxNode, skeleton: Skeleton, parent_name: s
     skeleton.all_nodes[node_name] = node_name
         
     for i in range(node.GetChildCount()):
-        collect_skeleton_nodes(node.GetChild(i), skeleton, parent_name, depth + 1, sampling_time)
+        collect_skeleton_nodes(node.GetChild(i), skeleton, parent_name, depth + 1, sampling_time, node_name)
 
 def extract_animation(scene: FbxScene, skeleton: Skeleton):
     stack = scene.GetCurrentAnimationStack()
@@ -1084,10 +1086,12 @@ def retarget_animation(src_skel: Skeleton, tgt_skel: Skeleton, mapping: dict[str
                     rot_disp = R.from_quat([yaw_q[1], yaw_q[2], yaw_q[3], yaw_q[0]])
                     disp_scaled = rot_disp.apply(disp_scaled)
                 
-                # Convert to target parent space
+                # Convert to target parent space (use actual FBX parent for
+                # root bones — non-bone ancestors like "Armature" have transforms)
                 prot = tgt_world_anims.get(pname, {}).get(f)
                 if prot is None:
-                    prot = tgt_skel.node_rest_rotations.get(pname, np.array([1, 0, 0, 0]))
+                    effective_parent = pname if pname else t_bone.fbx_parent_node_name
+                    prot = tgt_skel.node_rest_rotations.get(effective_parent, np.array([1, 0, 0, 0]))
                     if yaw_offset != 0:
                         prot = quaternion_multiply(yaw_q, prot)
                 p_rot_inv = R.from_quat([prot[1], prot[2], prot[3], prot[0]]).inv()
@@ -1102,11 +1106,12 @@ def retarget_animation(src_skel: Skeleton, tgt_skel: Skeleton, mapping: dict[str
         
         # We need the parent's TARGET world orientation at frame F
         # If the parent is NOT mapped, we use its REST orientation (or sampled if we had it)
+        # For root bones, use actual FBX parent (e.g. "Armature" node) instead of identity
         for f in frames:
             prot = tgt_world_anims.get(pname, {}).get(f)
             if prot is None:
-                # Fallback: Check if target skeleton has this node's rest orientation
-                prot = tgt_skel.node_rest_rotations.get(pname, np.array([1, 0, 0, 0]))
+                effective_parent = pname if pname else t_bone.fbx_parent_node_name
+                prot = tgt_skel.node_rest_rotations.get(effective_parent, np.array([1, 0, 0, 0]))
                 if yaw_offset != 0:
                     prot = quaternion_multiply(yaw_q, prot)
                 
