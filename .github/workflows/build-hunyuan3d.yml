@@ -1,17 +1,19 @@
-name: Build UniRig
+name: Build Hunyuan3D Container
 
 on:
   push:
     branches: [main, dev]
     paths:
-      - 'containers/unirig/**'
+      - 'containers/hunyuan3d/**'
+      - '.github/workflows/build-hunyuan3d.yml'
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/hunyuan3d
 
 jobs:
-  build-unirig:
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -47,7 +49,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/unirig
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=,format=short
@@ -55,15 +57,25 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./containers/unirig
+          context: ./containers/hunyuan3d
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+        timeout-minutes: 120
 
       - name: Output image URL
         run: |
-          echo "## UniRig Docker Image Published" >> $GITHUB_STEP_SUMMARY
+          echo "## Docker Image Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Image: \`${{ env.REGISTRY }}/${{ github.repository }}/unirig:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Hunyuan3D 2.1** — Image/text-to-3D mesh generation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Image: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### RunPod Setup" >> $GITHUB_STEP_SUMMARY
+          echo "1. Go to [RunPod Serverless Console](https://www.runpod.io/console/serverless)" >> $GITHUB_STEP_SUMMARY
+          echo "2. Create new endpoint" >> $GITHUB_STEP_SUMMARY
+          echo "3. Use image: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "4. Select 48GB+ GPU (A6000, A100, or H100) — ~29GB VRAM required" >> $GITHUB_STEP_SUMMARY
+          echo "5. Set worker type to Flex (scale to zero)" >> $GITHUB_STEP_SUMMARY

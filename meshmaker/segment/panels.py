@@ -1,28 +1,30 @@
-"""Blender UI panels for RigMaker."""
+"""Blender UI panels for PartMaker segmentation."""
 
 import bpy
 from bpy.types import Panel
 
+from .. import ADDON_ID
 
-class RIGMAKER_PT_main(Panel):
-    bl_label = "RigMaker"
-    bl_idname = "RIGMAKER_PT_main"
+
+class SEGMENT_PT_main(Panel):
+    bl_label = "PartMaker"
+    bl_idname = "SEGMENT_PT_main"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "RigMaker"
+    bl_category = "PartMaker"
 
     def draw(self, context):
         layout = self.layout
         wm = context.window_manager
 
         # Check for preferences
-        prefs = context.preferences.addons.get(__package__)
+        prefs = context.preferences.addons.get(ADDON_ID)
         if prefs is None:
             layout.label(text="Addon not found", icon='ERROR')
             return
         prefs = prefs.preferences
 
-        missing = not prefs.runpod_api_key or not prefs.mia_endpoint_id
+        missing = not prefs.runpod_api_key or not prefs.segment_endpoint_id
 
         if missing:
             layout.label(text="Set RunPod key & endpoint in preferences", icon='INFO')
@@ -30,10 +32,10 @@ class RIGMAKER_PT_main(Panel):
                 "preferences.addon_show",
                 text="Open Preferences",
                 icon='PREFERENCES',
-            ).module = __package__
+            ).module = ADDON_ID
             layout.separator()
 
-        busy = wm.rigmaker_status.startswith("Rigging")
+        busy = wm.segment_status.startswith("Segmenting")
 
         # Selected object info
         obj = context.active_object
@@ -47,37 +49,33 @@ class RIGMAKER_PT_main(Panel):
         else:
             layout.label(text="No mesh selected", icon='ERROR')
 
-        # Seed
-        layout.separator()
-        layout.prop(wm, "rigmaker_seed", text="Seed")
-
-        # Rig button
+        # Segment button
         layout.separator()
         row = layout.row(align=True)
         row.scale_y = 1.5
         row.enabled = not busy and not missing and obj is not None and obj.type == 'MESH'
         row.operator(
-            "rigmaker.auto_rig",
-            text="Rigging mesh..." if busy else "Rig",
-            icon='ARMATURE_DATA',
+            "segment.segment_mesh",
+            text="Segmenting..." if busy else "Segment Parts",
+            icon='MESH_DATA',
         )
 
         # Status
         layout.separator()
-        status = wm.rigmaker_status
+        status = wm.segment_status
         if status.startswith("Error"):
             layout.label(text=status, icon='ERROR')
         elif status.startswith("Done"):
             layout.label(text=status, icon='CHECKMARK')
-        elif status.startswith("Rigging"):
+        elif status.startswith("Segmenting"):
             layout.label(text=status, icon='SORTTIME')
         else:
             layout.label(text=status, icon='INFO')
 
 
 def register():
-    bpy.utils.register_class(RIGMAKER_PT_main)
+    bpy.utils.register_class(SEGMENT_PT_main)
 
 
 def unregister():
-    bpy.utils.unregister_class(RIGMAKER_PT_main)
+    bpy.utils.unregister_class(SEGMENT_PT_main)

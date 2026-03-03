@@ -39,6 +39,5 @@ output/
 
 # Blender
 *.blend1
-charmaker.zip
-rigmaker.zip
-animmaker.zip
+meshmaker.zip
+test_output/

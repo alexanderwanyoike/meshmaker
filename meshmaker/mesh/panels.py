@@ -1,24 +1,24 @@
-"""Blender UI panels for CharMaker."""
+"""Blender UI panels for MeshMaker mesh generation."""
 
 import bpy
 from bpy.types import Panel
 
+from .. import ADDON_ID
 from .operators import PREVIEW_NAME
 
 
-class CHARMAKER_PT_main(Panel):
-    bl_label = "CharMaker"
-    bl_idname = "CHARMAKER_PT_main"
+class MESHMAKER_PT_main(Panel):
+    bl_label = "MeshMaker"
+    bl_idname = "MESHMAKER_PT_main"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "CharMaker"
+    bl_category = "MeshMaker"
 
     def draw(self, context):
         layout = self.layout
         wm = context.window_manager
 
-        # Check for preferences
-        prefs = context.preferences.addons.get(__package__)
+        prefs = context.preferences.addons.get(ADDON_ID)
         if prefs is None:
             layout.label(text="Addon not found", icon='ERROR')
             return
@@ -36,25 +36,28 @@ class CHARMAKER_PT_main(Panel):
                 "preferences.addon_show",
                 text="Open Preferences",
                 icon='PREFERENCES',
-            ).module = __package__
+            ).module = ADDON_ID
             layout.separator()
+
+        # Model backend selector
+        layout.prop(wm, "meshmaker_model_backend", text="Model")
 
         # Workflow toggle
         row = layout.row(align=True)
-        row.prop(wm, "charmaker_workflow", expand=True)
+        row.prop(wm, "meshmaker_workflow", expand=True)
 
         layout.separator()
 
-        busy = wm.charmaker_status.startswith("Generating")
+        busy = wm.meshmaker_status.startswith("Generating")
 
-        if wm.charmaker_workflow == 'GENERATE':
+        if wm.meshmaker_workflow == 'GENERATE':
             self._draw_generate_workflow(layout, wm, busy)
         else:
             self._draw_file_workflow(layout, wm, busy)
 
         # Status (shared)
         layout.separator()
-        status = wm.charmaker_status
+        status = wm.meshmaker_status
         if status.startswith("Error"):
             layout.label(text=status, icon='ERROR')
         elif status.startswith("Done"):
@@ -73,16 +76,16 @@ class CHARMAKER_PT_main(Panel):
         # Prompt
         col = layout.column(align=True)
         col.label(text="Prompt:")
-        col.prop(wm, "charmaker_prompt", text="")
+        col.prop(wm, "meshmaker_prompt", text="")
 
         # Generate / Edit button
         row = col.row(align=True)
         row.scale_y = 1.5
         row.enabled = not busy
         if has_preview:
-            row.operator("charmaker.generate_image", text="Edit Image", icon='BRUSH_DATA')
+            row.operator("meshmaker.generate_image", text="Edit Image", icon='BRUSH_DATA')
         else:
-            row.operator("charmaker.generate_image", text="Generate Image", icon='IMAGE_DATA')
+            row.operator("meshmaker.generate_image", text="Generate Image", icon='IMAGE_DATA')
 
         # Preview display
         if has_preview:
@@ -92,15 +95,15 @@ class CHARMAKER_PT_main(Panel):
             else:
                 layout.label(text="(preview loading...)")
 
-            layout.operator("charmaker.clear_preview", text="Clear", icon='X')
+            layout.operator("meshmaker.clear_preview", text="Clear", icon='X')
 
-            # Trellis settings + generate 3D
+            # 3D settings + generate
             layout.separator()
             col = layout.column(align=True)
             col.label(text="3D Settings:")
-            col.prop(wm, "charmaker_resolution", text="Resolution")
-            col.prop(wm, "charmaker_texture_size", text="Texture Size")
-            col.prop(wm, "charmaker_seed", text="Seed")
+            col.prop(wm, "meshmaker_resolution", text="Resolution")
+            col.prop(wm, "meshmaker_texture_size", text="Texture Size")
+            col.prop(wm, "meshmaker_seed", text="Seed")
 
             layout.separator()
             row = layout.row(align=True)
@@ -108,48 +111,47 @@ class CHARMAKER_PT_main(Panel):
             row.enabled = not busy
 
             op = row.operator(
-                "charmaker.generate_mesh",
+                "meshmaker.generate_mesh",
                 text="Generating mesh..." if busy else "Generate 3D",
                 icon='MESH_MONKEY',
             )
             op.image_path = ""  # Will fall back to preview
-            op.resolution = wm.charmaker_resolution
-            op.texture_size = wm.charmaker_texture_size
-            op.seed = wm.charmaker_seed
+            op.resolution = wm.meshmaker_resolution
+            op.texture_size = wm.meshmaker_texture_size
+            op.seed = wm.meshmaker_seed
 
     def _draw_file_workflow(self, layout, wm, busy):
         col = layout.column(align=True)
         col.label(text="Reference Image:")
-        col.prop(wm, "charmaker_image_path", text="")
+        col.prop(wm, "meshmaker_image_path", text="")
 
         col.separator()
         col.label(text="Settings:")
-        col.prop(wm, "charmaker_resolution", text="Resolution")
-        col.prop(wm, "charmaker_texture_size", text="Texture Size")
-        col.prop(wm, "charmaker_seed", text="Seed")
+        col.prop(wm, "meshmaker_resolution", text="Resolution")
+        col.prop(wm, "meshmaker_texture_size", text="Texture Size")
+        col.prop(wm, "meshmaker_seed", text="Seed")
 
-        # Generate button
         layout.separator()
         row = layout.row(align=True)
         row.scale_y = 1.5
         row.enabled = not busy
 
         op = row.operator(
-            "charmaker.generate_mesh",
+            "meshmaker.generate_mesh",
             text="Generating mesh..." if busy else "Generate 3D",
             icon='MESH_MONKEY',
         )
-        op.image_path = wm.charmaker_image_path
-        op.resolution = wm.charmaker_resolution
-        op.texture_size = wm.charmaker_texture_size
-        op.seed = wm.charmaker_seed
+        op.image_path = wm.meshmaker_image_path
+        op.resolution = wm.meshmaker_resolution
+        op.texture_size = wm.meshmaker_texture_size
+        op.seed = wm.meshmaker_seed
 
 
 def register():
-    bpy.utils.register_class(CHARMAKER_PT_main)
+    bpy.utils.register_class(MESHMAKER_PT_main)
 
     wm = bpy.types.WindowManager
-    wm.charmaker_workflow = bpy.props.EnumProperty(
+    wm.meshmaker_workflow = bpy.props.EnumProperty(
         name="Workflow",
         items=[
             ('GENERATE', "Generate Image", "Text prompt → Gemini image → 3D"),
@@ -157,12 +159,12 @@ def register():
         ],
         default='GENERATE',
     )
-    wm.charmaker_image_path = bpy.props.StringProperty(
+    wm.meshmaker_image_path = bpy.props.StringProperty(
         name="Image Path",
         description="Path to the reference image",
         subtype='FILE_PATH',
     )
-    wm.charmaker_resolution = bpy.props.EnumProperty(
+    wm.meshmaker_resolution = bpy.props.EnumProperty(
         name="Resolution",
         items=[
             ('512', "512", "Fast, lower quality"),
@@ -171,7 +173,7 @@ def register():
         ],
         default='512',
     )
-    wm.charmaker_texture_size = bpy.props.EnumProperty(
+    wm.meshmaker_texture_size = bpy.props.EnumProperty(
         name="Texture Size",
         items=[
             ('1024', "1024", "Smaller file size"),
@@ -180,7 +182,7 @@ def register():
         ],
         default='2048',
     )
-    wm.charmaker_seed = bpy.props.IntProperty(
+    wm.meshmaker_seed = bpy.props.IntProperty(
         name="Seed",
         description="Random seed (0 = random)",
         default=0,
@@ -190,10 +192,10 @@ def register():
 
 def unregister():
     wm = bpy.types.WindowManager
-    del wm.charmaker_seed
-    del wm.charmaker_texture_size
-    del wm.charmaker_resolution
-    del wm.charmaker_image_path
-    del wm.charmaker_workflow
+    del wm.meshmaker_seed
+    del wm.meshmaker_texture_size
+    del wm.meshmaker_resolution
+    del wm.meshmaker_image_path
+    del wm.meshmaker_workflow
 
-    bpy.utils.unregister_class(CHARMAKER_PT_main)
+    bpy.utils.unregister_class(MESHMAKER_PT_main)

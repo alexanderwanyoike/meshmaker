@@ -10,7 +10,7 @@ import bpy
 from bpy.props import FloatProperty, IntProperty, StringProperty
 from bpy.types import Operator
 
-from . import api
+from .. import ADDON_ID, api
 
 
 class ANIMMAKER_OT_animate(Operator):
@@ -26,7 +26,7 @@ class ANIMMAKER_OT_animate(Operator):
     _armature_name = None
 
     def execute(self, context):
-        prefs = context.preferences.addons[__package__].preferences
+        prefs = context.preferences.addons[ADDON_ID].preferences
         api_key = prefs.runpod_api_key
         endpoint_id = prefs.hymotion_endpoint_id
 

@@ -1,4 +1,4 @@
-"""Blender operators for CharMaker."""
+"""Blender operators for MeshMaker mesh generation."""
 
 import base64
 import os
@@ -9,9 +9,9 @@ import bpy
 from bpy.props import EnumProperty, IntProperty, StringProperty
 from bpy.types import Operator
 
-from . import api
+from .. import ADDON_ID, api
 
-PREVIEW_NAME = "CharMaker Preview"
+PREVIEW_NAME = "MeshMaker Preview"
 
 
 def _cleanup_preview():
@@ -36,8 +36,8 @@ def _get_preview_b64():
         return base64.b64encode(f.read()).decode("utf-8")
 
 
-class CHARMAKER_OT_generate_image(Operator):
-    bl_idname = "charmaker.generate_image"
+class MESHMAKER_OT_generate_image(Operator):
+    bl_idname = "meshmaker.generate_image"
     bl_label = "Generate Image"
     bl_description = "Generate or edit a concept image with Gemini"
 
@@ -47,7 +47,7 @@ class CHARMAKER_OT_generate_image(Operator):
     _timer = None
 
     def execute(self, context):
-        prefs = context.preferences.addons[__package__].preferences
+        prefs = context.preferences.addons[ADDON_ID].preferences
         api_key = prefs.gemini_api_key
         model = prefs.gemini_model
 
@@ -56,7 +56,7 @@ class CHARMAKER_OT_generate_image(Operator):
             return {'CANCELLED'}
 
         wm = context.window_manager
-        prompt = wm.charmaker_prompt.strip()
+        prompt = wm.meshmaker_prompt.strip()
         if not prompt:
             self.report({'ERROR'}, "Enter a prompt first.")
             return {'CANCELLED'}
@@ -65,12 +65,12 @@ class CHARMAKER_OT_generate_image(Operator):
         image_b64 = _get_preview_b64()
 
         # Reset state
-        cls = CHARMAKER_OT_generate_image
+        cls = MESHMAKER_OT_generate_image
         cls._thread = None
         cls._result = None
         cls._error = None
 
-        wm.charmaker_status = "Generating image..."
+        wm.meshmaker_status = "Generating image..."
 
         def run():
             try:
@@ -91,7 +91,7 @@ class CHARMAKER_OT_generate_image(Operator):
             return {'PASS_THROUGH'}
 
         wm = context.window_manager
-        cls = CHARMAKER_OT_generate_image
+        cls = MESHMAKER_OT_generate_image
         thread = cls._thread
 
         if thread is not None and thread.is_alive():
@@ -102,7 +102,7 @@ class CHARMAKER_OT_generate_image(Operator):
 
         error = cls._error
         if error:
-            wm.charmaker_status = f"Error: {error[:80]}"
+            wm.meshmaker_status = f"Error: {error[:80]}"
             self.report({'ERROR'}, error)
             return {'CANCELLED'}
 
@@ -114,7 +114,7 @@ class CHARMAKER_OT_generate_image(Operator):
         # Save new image to temp file
         try:
             tmp = tempfile.NamedTemporaryFile(
-                suffix=".png", delete=False, prefix="charmaker_",
+                suffix=".png", delete=False, prefix="meshmaker_",
             )
             tmp.write(image_bytes)
             tmp.close()
@@ -122,10 +122,6 @@ class CHARMAKER_OT_generate_image(Operator):
             img = bpy.data.images.load(tmp.name)
             img.name = PREVIEW_NAME
 
-            # Manually populate preview pixels — preview_ensure() is async
-            # and won't be ready by the time the panel redraws.
-            # Set both icon and image previews so template_icon works
-            # at any scale.
             img.preview_ensure()
             w, h = img.size
             px = img.pixels[:]
@@ -135,14 +131,14 @@ class CHARMAKER_OT_generate_image(Operator):
             p.image_size = (w, h)
             p.image_pixels_float = px
 
-            wm.charmaker_preview_image = PREVIEW_NAME
+            wm.meshmaker_preview_image = PREVIEW_NAME
 
-            wm.charmaker_status = "Image ready"
+            wm.meshmaker_status = "Image ready"
             if text_response:
                 self.report({'INFO'}, text_response[:120])
 
         except Exception as e:
-            wm.charmaker_status = f"Error: {str(e)[:60]}"
+            wm.meshmaker_status = f"Error: {str(e)[:60]}"
             self.report({'ERROR'}, f"Failed to load preview: {e}")
             return {'CANCELLED'}
 
@@ -154,24 +150,24 @@ class CHARMAKER_OT_generate_image(Operator):
             self._timer = None
 
 
-class CHARMAKER_OT_clear_preview(Operator):
-    bl_idname = "charmaker.clear_preview"
+class MESHMAKER_OT_clear_preview(Operator):
+    bl_idname = "meshmaker.clear_preview"
     bl_label = "Clear Preview"
     bl_description = "Discard the current preview image"
 
     def execute(self, context):
         _cleanup_preview()
         wm = context.window_manager
-        wm.charmaker_preview_image = ""
-        wm.charmaker_prompt = ""
-        wm.charmaker_status = "Idle"
+        wm.meshmaker_preview_image = ""
+        wm.meshmaker_prompt = ""
+        wm.meshmaker_status = "Idle"
         return {'FINISHED'}
 
 
-class CHARMAKER_OT_generate_mesh(Operator):
-    bl_idname = "charmaker.generate_mesh"
+class MESHMAKER_OT_generate_mesh(Operator):
+    bl_idname = "meshmaker.generate_mesh"
     bl_label = "Generate 3D Mesh"
-    bl_description = "Generate a 3D mesh from an image using Trellis 2"
+    bl_description = "Generate a 3D mesh from an image using the selected model"
 
     image_path: StringProperty(
         name="Image",
@@ -213,15 +209,24 @@ class CHARMAKER_OT_generate_mesh(Operator):
     _timer = None
 
     def execute(self, context):
-        prefs = context.preferences.addons[__package__].preferences
+        prefs = context.preferences.addons[ADDON_ID].preferences
         api_key = prefs.runpod_api_key
-        endpoint_id = prefs.trellis_endpoint_id
+
+        wm = context.window_manager
+        model_backend = wm.meshmaker_model_backend
+
+        if model_backend == 'HUNYUAN3D':
+            endpoint_id = prefs.hunyuan3d_endpoint_id
+            endpoint_label = "Hunyuan3D 2.1"
+        else:
+            endpoint_id = prefs.trellis_endpoint_id
+            endpoint_label = "Trellis 2"
 
         if not api_key:
             self.report({'ERROR'}, "RunPod API key not set. Check addon preferences.")
             return {'CANCELLED'}
         if not endpoint_id:
-            self.report({'ERROR'}, "Trellis endpoint ID not set. Check addon preferences.")
+            self.report({'ERROR'}, f"{endpoint_label} endpoint ID not set. Check addon preferences.")
             return {'CANCELLED'}
 
         # Resolve image path — fall back to preview if no explicit path
@@ -231,45 +236,46 @@ class CHARMAKER_OT_generate_mesh(Operator):
             if preview is not None:
                 image_path = bpy.path.abspath(preview.filepath)
 
-        if not image_path or not os.path.isfile(image_path):
+        # For Hunyuan3D text-to-3D, image is optional
+        has_image = image_path and os.path.isfile(image_path)
+        text_prompt = wm.meshmaker_prompt.strip() if model_backend == 'HUNYUAN3D' else ""
+
+        if not has_image and not text_prompt:
             self.report({'ERROR'}, "No image available. Generate or select one first.")
             return {'CANCELLED'}
 
-        # Read and encode the image
-        with open(image_path, "rb") as f:
-            image_b64 = base64.b64encode(f.read()).decode("utf-8")
-
+        # Build payload
         payload_input = {
-            "image": image_b64,
             "resolution": int(self.resolution),
             "texture_size": int(self.texture_size),
         }
+        if has_image:
+            with open(image_path, "rb") as f:
+                payload_input["image"] = base64.b64encode(f.read()).decode("utf-8")
+        if text_prompt:
+            payload_input["text"] = text_prompt
         if self.seed > 0:
             payload_input["seed"] = self.seed
 
         payload = {"input": payload_input}
 
         # Reset state
-        CHARMAKER_OT_generate_mesh._thread = None
-        CHARMAKER_OT_generate_mesh._result = None
-        CHARMAKER_OT_generate_mesh._error = None
+        MESHMAKER_OT_generate_mesh._thread = None
+        MESHMAKER_OT_generate_mesh._result = None
+        MESHMAKER_OT_generate_mesh._error = None
 
-        # Update status
-        wm = context.window_manager
-        wm.charmaker_status = "Generating mesh..."
+        wm.meshmaker_status = f"Generating mesh ({endpoint_label})..."
 
-        # Launch background thread
         def run():
             try:
                 result = api.call_runpod(api_key, endpoint_id, payload)
-                CHARMAKER_OT_generate_mesh._result = result
+                MESHMAKER_OT_generate_mesh._result = result
             except Exception as e:
-                CHARMAKER_OT_generate_mesh._error = str(e)
+                MESHMAKER_OT_generate_mesh._error = str(e)
 
-        CHARMAKER_OT_generate_mesh._thread = threading.Thread(target=run, daemon=True)
-        CHARMAKER_OT_generate_mesh._thread.start()
+        MESHMAKER_OT_generate_mesh._thread = threading.Thread(target=run, daemon=True)
+        MESHMAKER_OT_generate_mesh._thread.start()
 
-        # Start modal timer
         self._timer = wm.event_timer_add(0.5, window=context.window)
         wm.modal_handler_add(self)
         return {'RUNNING_MODAL'}
@@ -279,32 +285,27 @@ class CHARMAKER_OT_generate_mesh(Operator):
             return {'PASS_THROUGH'}
 
         wm = context.window_manager
-        thread = CHARMAKER_OT_generate_mesh._thread
+        thread = MESHMAKER_OT_generate_mesh._thread
 
-        # Still running
         if thread is not None and thread.is_alive():
             return {'PASS_THROUGH'}
 
-        # Done — clean up timer
         wm.event_timer_remove(self._timer)
         self._timer = None
 
-        # Check for errors
-        error = CHARMAKER_OT_generate_mesh._error
+        error = MESHMAKER_OT_generate_mesh._error
         if error:
-            wm.charmaker_status = f"Error: {error[:80]}"
+            wm.meshmaker_status = f"Error: {error[:80]}"
             self.report({'ERROR'}, error)
             return {'CANCELLED'}
 
-        # Extract GLB
-        result = CHARMAKER_OT_generate_mesh._result
+        result = MESHMAKER_OT_generate_mesh._result
         glb_b64 = result.get("glb") if result else None
         if not glb_b64:
-            wm.charmaker_status = "Error: no GLB in response"
+            wm.meshmaker_status = "Error: no GLB in response"
             self.report({'ERROR'}, "No GLB data in response")
             return {'CANCELLED'}
 
-        # Write temp file and import
         tmp = None
         try:
             tmp = tempfile.NamedTemporaryFile(suffix=".glb", delete=False)
@@ -315,12 +316,12 @@ class CHARMAKER_OT_generate_mesh(Operator):
 
             meta = result.get("metadata", {})
             seed_str = meta.get("seed", "n/a")
-            gen_time = meta.get("generation_time", "?")
-            wm.charmaker_status = f"Done (seed={seed_str}, {gen_time}s)"
+            gen_time = meta.get("generation_time", meta.get("processing_time", "?"))
+            wm.meshmaker_status = f"Done (seed={seed_str}, {gen_time}s)"
             self.report({'INFO'}, f"Mesh imported (seed={seed_str})")
 
         except Exception as e:
-            wm.charmaker_status = f"Import error: {str(e)[:60]}"
+            wm.meshmaker_status = f"Import error: {str(e)[:60]}"
             self.report({'ERROR'}, f"Failed to import GLB: {e}")
             return {'CANCELLED'}
         finally:
@@ -336,31 +337,39 @@ class CHARMAKER_OT_generate_mesh(Operator):
 
 
 def register():
-    bpy.utils.register_class(CHARMAKER_OT_generate_image)
-    bpy.utils.register_class(CHARMAKER_OT_clear_preview)
-    bpy.utils.register_class(CHARMAKER_OT_generate_mesh)
+    bpy.utils.register_class(MESHMAKER_OT_generate_image)
+    bpy.utils.register_class(MESHMAKER_OT_clear_preview)
+    bpy.utils.register_class(MESHMAKER_OT_generate_mesh)
 
     wm = bpy.types.WindowManager
-    wm.charmaker_status = StringProperty(name="Status", default="Idle")
-    wm.charmaker_prompt = StringProperty(
+    wm.meshmaker_status = StringProperty(name="Status", default="Idle")
+    wm.meshmaker_prompt = StringProperty(
         name="Prompt",
         description="Text prompt for Gemini image generation",
     )
-    wm.charmaker_preview_image = StringProperty(
+    wm.meshmaker_preview_image = StringProperty(
         name="Preview Image",
         description="Name of the preview image datablock",
+    )
+    wm.meshmaker_model_backend = EnumProperty(
+        name="Model",
+        items=[
+            ('TRELLIS2', "Trellis 2", "Microsoft TRELLIS.2-4B (image-to-3D)"),
+            ('HUNYUAN3D', "Hunyuan3D 2.1", "Tencent Hunyuan3D 2.1 (image/text-to-3D)"),
+        ],
+        default='TRELLIS2',
     )
 
 
 def unregister():
-    # Clean up any remaining preview
     _cleanup_preview()
 
     wm = bpy.types.WindowManager
-    del wm.charmaker_preview_image
-    del wm.charmaker_prompt
-    del wm.charmaker_status
+    del wm.meshmaker_model_backend
+    del wm.meshmaker_preview_image
+    del wm.meshmaker_prompt
+    del wm.meshmaker_status
 
-    bpy.utils.unregister_class(CHARMAKER_OT_generate_mesh)
-    bpy.utils.unregister_class(CHARMAKER_OT_clear_preview)
-    bpy.utils.unregister_class(CHARMAKER_OT_generate_image)
+    bpy.utils.unregister_class(MESHMAKER_OT_generate_mesh)
+    bpy.utils.unregister_class(MESHMAKER_OT_clear_preview)
+    bpy.utils.unregister_class(MESHMAKER_OT_generate_image)

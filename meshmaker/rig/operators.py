@@ -10,7 +10,7 @@ import bpy
 from bpy.props import IntProperty, StringProperty
 from bpy.types import Operator
 
-from . import api
+from .. import ADDON_ID, api
 
 
 def _apply_rig(context, fbx_bytes, original_obj):
@@ -69,7 +69,7 @@ class RIGMAKER_OT_auto_rig(Operator):
     _original_obj_name = None
 
     def execute(self, context):
-        prefs = context.preferences.addons[__package__].preferences
+        prefs = context.preferences.addons[ADDON_ID].preferences
         api_key = prefs.runpod_api_key
         endpoint_id = prefs.mia_endpoint_id
 

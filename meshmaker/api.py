@@ -1,5 +1,6 @@
-"""API client for RunPod (HY-Motion)."""
+"""API clients for RunPod and Gemini (shared across all subpackages)."""
 
+import base64
 import json
 import time
 import urllib.error
@@ -71,10 +72,10 @@ def call_runpod(api_key, endpoint_id, payload, timeout=600):
     if not job_id:
         raise RunPodError("No job ID in response")
 
-    # Poll for completion. The COMPLETED response includes the full output,
-    # so we use a generous read timeout and catch ALL exceptions — any
-    # transient failure (DNS, socket timeout, incomplete read, connection
-    # reset) just triggers a retry on the next iteration.
+    # Poll for completion. The COMPLETED response includes the full output
+    # (20MB+ base64 GLB), so we use a generous read timeout and catch ALL
+    # exceptions — any transient failure (DNS, socket timeout, incomplete
+    # read, connection reset) just triggers a retry on the next iteration.
     status_url = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
     deadline = time.monotonic() + timeout
 
@@ -100,3 +101,82 @@ def call_runpod(api_key, endpoint_id, payload, timeout=600):
             raise RunPodError(f"Job failed: {json.dumps(result, default=str)}")
 
     raise RunPodError(f"Job {job_id} timed out after {timeout}s")
+
+
+class GeminiError(Exception):
+    pass
+
+
+def call_gemini(api_key, model, prompt, image_b64=None, timeout=120):
+    """Call Gemini to generate or edit an image.
+
+    Args:
+        api_key: Gemini API key.
+        model: Model name (e.g. "gemini-2.5-flash-preview-image-generation").
+        prompt: Text prompt for generation or editing.
+        image_b64: Optional base64-encoded image for editing mode.
+        timeout: Request timeout in seconds.
+
+    Returns:
+        (image_bytes, text_response) tuple. text_response may be empty.
+
+    Raises:
+        GeminiError: On API errors or missing image in response.
+    """
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/"
+        f"models/{model}:generateContent?key={api_key}"
+    )
+
+    parts = []
+    if image_b64 is not None:
+        parts.append({
+            "inlineData": {"mimeType": "image/png", "data": image_b64},
+        })
+    parts.append({"text": prompt})
+
+    payload = {
+        "contents": [{"parts": parts}],
+        "generationConfig": {"responseModalities": ["IMAGE", "TEXT"]},
+    }
+
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with _urlopen_with_retry(req, timeout=timeout) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        raise GeminiError(f"HTTP {e.code}: {body}") from e
+    except urllib.error.URLError as e:
+        raise GeminiError(f"Connection error: {e.reason}") from e
+
+    if "error" in result:
+        msg = result["error"].get("message", json.dumps(result["error"]))
+        raise GeminiError(msg)
+
+    candidates = result.get("candidates", [])
+    if not candidates:
+        raise GeminiError("No candidates in response")
+
+    response_parts = candidates[0].get("content", {}).get("parts", [])
+
+    image_bytes = None
+    text_response = ""
+
+    for part in response_parts:
+        inline = part.get("inlineData")
+        if inline and inline.get("mimeType", "").startswith("image/"):
+            image_bytes = base64.b64decode(inline["data"])
+        if "text" in part:
+            text_response = part["text"]
+
+    if image_bytes is None:
+        raise GeminiError("No image in response")
+
+    return image_bytes, text_response

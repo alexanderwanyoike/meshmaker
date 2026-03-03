@@ -3,6 +3,8 @@
 import bpy
 from bpy.types import Panel
 
+from .. import ADDON_ID
+
 
 class ANIMMAKER_PT_main(Panel):
     bl_label = "AnimMaker"
@@ -16,7 +18,7 @@ class ANIMMAKER_PT_main(Panel):
         wm = context.window_manager
 
         # Check for preferences
-        prefs = context.preferences.addons.get(__package__)
+        prefs = context.preferences.addons.get(ADDON_ID)
         if prefs is None:
             layout.label(text="Addon not found", icon='ERROR')
             return
@@ -30,7 +32,7 @@ class ANIMMAKER_PT_main(Panel):
                 "preferences.addon_show",
                 text="Open Preferences",
                 icon='PREFERENCES',
-            ).module = __package__
+            ).module = ADDON_ID
             layout.separator()
 
         busy = wm.animmaker_status.startswith("Generating")

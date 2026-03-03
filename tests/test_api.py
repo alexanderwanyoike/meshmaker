@@ -1,4 +1,4 @@
-"""Tests for addon/api.py — Gemini and RunPod API clients."""
+"""Tests for meshmaker/api.py — Gemini and RunPod API clients."""
 
 import base64
 import importlib.util
@@ -9,9 +9,9 @@ import unittest
 from unittest.mock import MagicMock, patch
 import urllib.error
 
-# Import api.py directly to avoid addon/__init__.py pulling in bpy
-_api_path = os.path.join(os.path.dirname(__file__), "..", "addon", "api.py")
-_spec = importlib.util.spec_from_file_location("charmaker_api", _api_path)
+# Import api.py directly to avoid meshmaker/__init__.py pulling in bpy
+_api_path = os.path.join(os.path.dirname(__file__), "..", "meshmaker", "api.py")
+_spec = importlib.util.spec_from_file_location("meshmaker_api", _api_path)
 api = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(api)
 
@@ -28,7 +28,7 @@ def _make_http_response(body_dict):
 
 def _patch_api(name):
     """Patch a name on the api module directly (avoids bpy import)."""
-    return patch.object(api, name) if hasattr(api, name) else patch(f"charmaker_api.{name}")
+    return patch.object(api, name) if hasattr(api, name) else patch(f"meshmaker_api.{name}")
 
 
 def _patch_urlopen():
