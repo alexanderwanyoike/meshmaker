@@ -25,7 +25,7 @@ WORKDIR /app/hunyuan3d-part
 
 # Install Sonata backbone (P3-SAM's feature extractor, from Facebook Research).
 # model.py imports: from models import sonata  (via XPart/partgen/)
-RUN pip install --no-cache-dir "sonata-model @ git+https://github.com/facebookresearch/sonata.git"
+RUN pip install --no-cache-dir git+https://github.com/facebookresearch/sonata.git
 
 # Install P3-SAM Python dependencies
 RUN pip install --no-cache-dir \
