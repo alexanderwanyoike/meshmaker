@@ -1,34 +1,21 @@
 # Hunyuan3D 2.1 RunPod Serverless Container
 # Image/text-to-3D mesh generation using Tencent Hunyuan3D 2.1
 
-FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
-ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV HF_HOME=/runpod-volume/huggingface
-ENV TRANSFORMERS_CACHE=/runpod-volume/huggingface
 ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# System dependencies
+# System dependencies for CUDA extension builds and mesh processing
 RUN apt-get update && apt-get install -y \
-    python3.11 python3.11-dev python3.11-venv python3-pip \
-    git git-lfs curl wget \
+    git-lfs \
     libjpeg-dev libpng-dev libgl1-mesa-glx libglib2.0-0 \
-    zlib1g-dev ninja-build \
+    ninja-build \
     && rm -rf /var/lib/apt/lists/* \
     && git lfs install
 
-# Set python3.11 as default
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \
-    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
-    curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
-
 WORKDIR /app
-
-# Install PyTorch 2.5.1+cu124
-RUN pip install --no-cache-dir \
-    torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 \
-    --index-url https://download.pytorch.org/whl/cu124
 
 # Clone Hunyuan3D 2.1
 RUN git clone --depth 1 https://github.com/Tencent/Hunyuan3D-2.git /app/hunyuan3d
