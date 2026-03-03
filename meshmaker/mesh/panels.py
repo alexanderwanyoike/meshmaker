@@ -4,7 +4,7 @@ import bpy
 from bpy.types import Panel
 
 from .. import ADDON_ID
-from .operators import PREVIEW_NAME
+from .operators import MESH_MODELS, PREVIEW_NAME
 
 
 class MESHMAKER_PT_main(Panel):
@@ -24,14 +24,18 @@ class MESHMAKER_PT_main(Panel):
             return
         prefs = prefs.preferences
 
-        missing_runpod = not prefs.runpod_api_key or not prefs.trellis_endpoint_id
+        model_key = wm.meshmaker_model_backend
+        model = MESH_MODELS[model_key]
+        endpoint_id = getattr(prefs, model["pref_field"], "")
+
+        missing_runpod = not prefs.runpod_api_key or not endpoint_id
         missing_gemini = not prefs.gemini_api_key
 
         if missing_runpod or missing_gemini:
             if missing_gemini:
                 layout.label(text="Set Gemini key in preferences", icon='INFO')
             if missing_runpod:
-                layout.label(text="Set RunPod key & endpoint in preferences", icon='INFO')
+                layout.label(text=f"Set RunPod key & {model['label']} endpoint", icon='INFO')
             layout.operator(
                 "preferences.addon_show",
                 text="Open Preferences",

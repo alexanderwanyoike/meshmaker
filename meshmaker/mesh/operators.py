@@ -13,6 +13,34 @@ from .. import ADDON_ID, api
 
 PREVIEW_NAME = "MeshMaker Preview"
 
+# ---------------------------------------------------------------------------
+# Model registry — single source of truth for mesh-generation backends.
+# To add a new model: add an entry here + a matching StringProperty in
+# preferences.py.  Everything else (enum, routing, panel) reads from this.
+# ---------------------------------------------------------------------------
+MESH_MODELS = {
+    "TRELLIS2": {
+        "label": "Trellis 2",
+        "description": "Microsoft TRELLIS.2-4B (image-to-3D)",
+        "pref_field": "trellis_endpoint_id",
+        "supports_text": False,
+        "supports_image": True,
+    },
+    "HUNYUAN3D": {
+        "label": "Hunyuan3D 2.1",
+        "description": "Tencent Hunyuan3D 2.1 (image/text-to-3D)",
+        "pref_field": "hunyuan3d_endpoint_id",
+        "supports_text": True,
+        "supports_image": True,
+    },
+}
+
+# Blender EnumProperty items built from registry
+MESH_MODEL_ITEMS = [
+    (key, info["label"], info["description"])
+    for key, info in MESH_MODELS.items()
+]
+
 
 def _cleanup_preview():
     """Remove the preview image datablock and its temp file."""
@@ -213,20 +241,15 @@ class MESHMAKER_OT_generate_mesh(Operator):
         api_key = prefs.runpod_api_key
 
         wm = context.window_manager
-        model_backend = wm.meshmaker_model_backend
-
-        if model_backend == 'HUNYUAN3D':
-            endpoint_id = prefs.hunyuan3d_endpoint_id
-            endpoint_label = "Hunyuan3D 2.1"
-        else:
-            endpoint_id = prefs.trellis_endpoint_id
-            endpoint_label = "Trellis 2"
+        model_key = wm.meshmaker_model_backend
+        model = MESH_MODELS[model_key]
+        endpoint_id = getattr(prefs, model["pref_field"], "")
 
         if not api_key:
             self.report({'ERROR'}, "RunPod API key not set. Check addon preferences.")
             return {'CANCELLED'}
         if not endpoint_id:
-            self.report({'ERROR'}, f"{endpoint_label} endpoint ID not set. Check addon preferences.")
+            self.report({'ERROR'}, f"{model['label']} endpoint ID not set. Check addon preferences.")
             return {'CANCELLED'}
 
         # Resolve image path — fall back to preview if no explicit path
@@ -236,9 +259,8 @@ class MESHMAKER_OT_generate_mesh(Operator):
             if preview is not None:
                 image_path = bpy.path.abspath(preview.filepath)
 
-        # For Hunyuan3D text-to-3D, image is optional
         has_image = image_path and os.path.isfile(image_path)
-        text_prompt = wm.meshmaker_prompt.strip() if model_backend == 'HUNYUAN3D' else ""
+        text_prompt = wm.meshmaker_prompt.strip() if model["supports_text"] else ""
 
         if not has_image and not text_prompt:
             self.report({'ERROR'}, "No image available. Generate or select one first.")
@@ -264,7 +286,7 @@ class MESHMAKER_OT_generate_mesh(Operator):
         MESHMAKER_OT_generate_mesh._result = None
         MESHMAKER_OT_generate_mesh._error = None
 
-        wm.meshmaker_status = f"Generating mesh ({endpoint_label})..."
+        wm.meshmaker_status = f"Generating mesh ({model['label']})..."
 
         def run():
             try:
@@ -353,10 +375,7 @@ def register():
     )
     wm.meshmaker_model_backend = EnumProperty(
         name="Model",
-        items=[
-            ('TRELLIS2', "Trellis 2", "Microsoft TRELLIS.2-4B (image-to-3D)"),
-            ('HUNYUAN3D', "Hunyuan3D 2.1", "Tencent Hunyuan3D 2.1 (image/text-to-3D)"),
-        ],
+        items=MESH_MODEL_ITEMS,
         default='TRELLIS2',
     )
 
