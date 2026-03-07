@@ -51,6 +51,7 @@ def load_model():
             SHAPE_MODEL,
             subfolder="hunyuan3d-dit-v2-1",
             torch_dtype=torch.float16,
+            use_safetensors=False,
         )
         shape_pipeline = shape_pipeline.to("cuda")
 
@@ -66,7 +67,7 @@ def load_model():
 
         paint_pipeline = Hunyuan3DPaintPipeline.from_pretrained(
             PAINT_MODEL,
-            subfolder="hunyuan3d-paint-v2-1",
+            subfolder="hunyuan3d-paintpbr-v2-1",
             torch_dtype=torch.float16,
         )
         paint_pipeline = paint_pipeline.to("cuda")
