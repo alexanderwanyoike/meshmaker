@@ -22,8 +22,9 @@ RUN git clone --depth 1 https://github.com/Tencent/Hunyuan3D-2.git /app/hunyuan3
 
 WORKDIR /app/hunyuan3d
 
-# Install requirements
-RUN pip install --no-cache-dir -r requirements.txt
+# Install requirements (pin diffusers<0.33 for PyTorch 2.4 compat)
+RUN pip install --no-cache-dir "diffusers<0.33" && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Target GPU architectures for CUDA extension builds (no GPU available in CI)
 # 8.0=A100, 8.6=A6000/RTX3090, 8.9=RTX4090/L40, 9.0=H100
