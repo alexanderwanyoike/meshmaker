@@ -2,7 +2,7 @@
 RunPod Serverless Handler for Hunyuan3D 2.1
 
 Generates 3D GLB models from images or text prompts using Tencent's Hunyuan3D 2.1.
-Shape model (3.3B) generates geometry, Paint model (2B) textures it.
+Shape model (3.3B) generates geometry, Paint pipeline textures it with PBR materials.
 """
 
 import os
@@ -16,14 +16,14 @@ from typing import Any
 import requests
 import runpod
 
-# Add Hunyuan3D to path
+# Add Hunyuan3D 2.1 to path
 HUNYUAN3D_DIR = "/app/hunyuan3d"
-sys.path.insert(0, HUNYUAN3D_DIR)
+sys.path.insert(0, os.path.join(HUNYUAN3D_DIR, "hy3dshape"))
+sys.path.insert(0, os.path.join(HUNYUAN3D_DIR, "hy3dpaint"))
 
 # Configuration
 VOLUME_PATH = os.environ.get("VOLUME_PATH", "/runpod-volume")
 SHAPE_MODEL = "tencent/Hunyuan3D-2.1"
-PAINT_MODEL = "tencent/Hunyuan3D-2.1"
 
 # Global pipeline references
 shape_pipeline = None
@@ -45,31 +45,26 @@ def load_model():
         print(f"Loading Shape pipeline from {SHAPE_MODEL}...")
         start_time = time.time()
 
-        from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
+        from pipelines import Hunyuan3DDiTFlowMatchingPipeline
 
         shape_pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
             SHAPE_MODEL,
-            subfolder="hunyuan3d-dit-v2-1",
-            torch_dtype=torch.float16,
-            use_safetensors=False,
         )
         shape_pipeline = shape_pipeline.to("cuda")
 
         load_time = time.time() - start_time
         print(f"Shape pipeline loaded in {load_time:.2f}s")
 
-    # Load Paint pipeline (2B params)
+    # Load Paint pipeline (texture with PBR)
     if paint_pipeline is None:
-        print(f"Loading Paint pipeline from {PAINT_MODEL}...")
+        print("Loading Paint pipeline...")
         start_time = time.time()
 
-        from hy3dgen.texgen import Hunyuan3DPaintPipeline
+        from textureGenPipeline import Hunyuan3DPaintPipeline, Hunyuan3DPaintConfig
 
-        paint_pipeline = Hunyuan3DPaintPipeline.from_pretrained(
-            PAINT_MODEL,
-            subfolder="hunyuan3d-paintpbr-v2-1",
+        paint_pipeline = Hunyuan3DPaintPipeline(
+            Hunyuan3DPaintConfig(max_num_view=6, resolution=512)
         )
-        paint_pipeline = paint_pipeline.to("cuda")
 
         load_time = time.time() - start_time
         print(f"Paint pipeline loaded in {load_time:.2f}s")
@@ -180,25 +175,39 @@ def generate_3d(
         shape_kwargs["prompt"] = text
 
     mesh = shape_pipeline(**shape_kwargs)
+    if isinstance(mesh, (list, tuple)):
+        mesh = mesh[0]
 
     shape_time = time.time() - shape_start
     print(f"Shape generation completed in {shape_time:.2f}s")
 
     # Texture generation (Paint)
+    paint_time = 0.0
     if texture and paint_pipeline is not None:
         print("Running texture generation...")
         paint_start = time.time()
 
-        paint_kwargs = dict(mesh=mesh)
-        if image is not None:
-            paint_kwargs["image"] = image
+        # Paint pipeline expects file paths, save mesh and image to temp files
+        with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:
+            mesh_path = tmp.name
+        mesh.export(mesh_path)
 
-        mesh = paint_pipeline(mesh, image=image if image is not None else None)
+        paint_kwargs = {"mesh_path": mesh_path}
+        if image is not None:
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                image_path = tmp.name
+            image.save(image_path)
+            paint_kwargs["image_path"] = image_path
+
+        mesh = paint_pipeline(**paint_kwargs)
+
+        # Clean up temp files
+        os.unlink(mesh_path)
+        if image is not None:
+            os.unlink(image_path)
 
         paint_time = time.time() - paint_start
         print(f"Texture generation completed in {paint_time:.2f}s")
-    else:
-        paint_time = 0.0
 
     # Export to GLB
     print("Exporting to GLB...")
