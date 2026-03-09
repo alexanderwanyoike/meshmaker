@@ -8,11 +8,19 @@ ENV HF_HOME=/runpod-volume/huggingface
 ENV HY3DGEN_MODELS=/runpod-volume/hy3dgen_models
 ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# System dependencies for CUDA extension builds and mesh processing
+# System dependencies
+# - X11 libs required by bpy (headless Blender for OBJ-to-GLB conversion)
+# - OpenGL libs for mesh rendering
+# - Build tools for CUDA extensions
+# Matches proven working set from MIA container + upstream Hunyuan3D docker
 RUN apt-get update && apt-get install -y \
     git-lfs \
-    libjpeg-dev libpng-dev libgl1-mesa-glx libglib2.0-0 \
     ninja-build \
+    cmake \
+    libjpeg-dev libpng-dev \
+    libgl1-mesa-glx libglib2.0-0 libegl1-mesa-dev \
+    libxrender1 libsm6 libxext6 libxi6 libxxf86vm1 libxfixes3 libxkbcommon0 \
+    libeigen3-dev libcgal-dev \
     && rm -rf /var/lib/apt/lists/* \
     && git lfs install
 
@@ -23,8 +31,7 @@ RUN git clone --depth 1 https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1.git /ap
 
 WORKDIR /app/hunyuan3d
 
-# Install curated requirements (no bpy, no gradio, no deepspeed)
-# --ignore-installed handles distutils-installed packages in base image
+# Install curated requirements
 COPY requirements.txt /app/requirements_serverless.txt
 RUN pip install --no-cache-dir --ignore-installed -r /app/requirements_serverless.txt
 
