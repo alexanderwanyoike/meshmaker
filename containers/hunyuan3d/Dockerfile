@@ -17,19 +17,15 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Clone the correct 2.1 repo (not Tencent/Hunyuan3D-2)
+# Clone the 2.1 repo
 RUN git clone --depth 1 https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1.git /app/hunyuan3d
 
 WORKDIR /app/hunyuan3d
 
-# Pin diffusers + transformers for PyTorch 2.4 compat
-# diffusers>=0.33 needs torch custom_ops not in PyTorch 2.4
-# transformers>=4.52 removed FLAX_WEIGHTS_NAME needed by diffusers<0.33
-RUN pip install --no-cache-dir "diffusers>=0.31,<0.33" "transformers>=4.44,<4.52"
-
-# Install requirements (exclude bpy — not needed for serverless inference)
-RUN grep -v '^bpy' requirements.txt > requirements_filtered.txt && \
-    pip install --no-cache-dir -r requirements_filtered.txt
+# Install curated requirements (no bpy, no gradio, no deepspeed)
+# --ignore-installed handles distutils-installed packages in base image
+COPY requirements.txt /app/requirements_serverless.txt
+RUN pip install --no-cache-dir --ignore-installed -r /app/requirements_serverless.txt
 
 # Target GPU architectures for CUDA extension builds (no GPU available in CI)
 # 8.0=A100, 8.6=A6000/RTX3090, 8.9=RTX4090/L40, 9.0=H100
@@ -47,8 +43,8 @@ RUN cd /app/hunyuan3d/hy3dpaint/DifferentiableRenderer && \
 RUN wget -q https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth \
     -P /app/hunyuan3d/hy3dpaint/ckpt
 
-# Install RunPod SDK and utilities
-RUN pip install --no-cache-dir runpod>=1.6.0 requests huggingface_hub
+# Install RunPod SDK
+RUN pip install --no-cache-dir runpod>=1.6.0
 
 COPY handler.py /app/handler.py
 WORKDIR /app
