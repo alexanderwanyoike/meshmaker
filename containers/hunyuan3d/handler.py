@@ -18,8 +18,7 @@ import runpod
 
 # Add Hunyuan3D 2.1 to path
 HUNYUAN3D_DIR = "/app/hunyuan3d"
-sys.path.insert(0, os.path.join(HUNYUAN3D_DIR, "hy3dshape"))
-sys.path.insert(0, os.path.join(HUNYUAN3D_DIR, "hy3dpaint"))
+sys.path.insert(0, HUNYUAN3D_DIR)
 
 # Configuration
 VOLUME_PATH = os.environ.get("VOLUME_PATH", "/runpod-volume")
@@ -45,7 +44,7 @@ def load_model():
         print(f"Loading Shape pipeline from {SHAPE_MODEL}...")
         start_time = time.time()
 
-        from pipelines import Hunyuan3DDiTFlowMatchingPipeline
+        from hy3dshape.pipelines import Hunyuan3DDiTFlowMatchingPipeline
 
         shape_pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
             SHAPE_MODEL,
@@ -60,7 +59,7 @@ def load_model():
         print("Loading Paint pipeline...")
         start_time = time.time()
 
-        from textureGenPipeline import Hunyuan3DPaintPipeline, Hunyuan3DPaintConfig
+        from hy3dpaint.textureGenPipeline import Hunyuan3DPaintPipeline, Hunyuan3DPaintConfig
 
         paint_pipeline = Hunyuan3DPaintPipeline(
             Hunyuan3DPaintConfig(max_num_view=6, resolution=512)
