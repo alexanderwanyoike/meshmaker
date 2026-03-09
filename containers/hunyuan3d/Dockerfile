@@ -27,8 +27,9 @@ WORKDIR /app/hunyuan3d
 # transformers>=4.52 removed FLAX_WEIGHTS_NAME needed by diffusers<0.33
 RUN pip install --no-cache-dir "diffusers>=0.31,<0.33" "transformers>=4.44,<4.52"
 
-# Install requirements
-RUN pip install --no-cache-dir -r requirements.txt
+# Install requirements (exclude bpy — not needed for serverless inference)
+RUN grep -v '^bpy' requirements.txt > requirements_filtered.txt && \
+    pip install --no-cache-dir -r requirements_filtered.txt
 
 # Target GPU architectures for CUDA extension builds (no GPU available in CI)
 # 8.0=A100, 8.6=A6000/RTX3090, 8.9=RTX4090/L40, 9.0=H100
