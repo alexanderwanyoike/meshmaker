@@ -49,7 +49,7 @@ RUN cd /app/hunyuan3d/hy3dpaint/DifferentiableRenderer && \
 
 # Download RealESRGAN for texture upscaling
 RUN wget -q https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth \
-    -P /app/hunyuan3d/hy3dpaint/ckpt
+    -P /app/hunyuan3d/ckpt
 
 # Install RunPod SDK
 RUN pip install --no-cache-dir runpod>=1.6.0
