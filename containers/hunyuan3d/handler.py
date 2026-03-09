@@ -37,7 +37,7 @@ def load_model():
     global shape_pipeline, paint_pipeline
 
     if shape_pipeline is not None and paint_pipeline is not None:
-        return shape_pipeline, paint_pipeline
+        return
 
     os.chdir(HUNYUAN3D_DIR)
     import torch
@@ -292,12 +292,8 @@ def handler(job: dict) -> dict:
 
 # Load model on cold start
 print("Initializing Hunyuan3D 2.1 handler...")
-try:
-    load_model()
-    print("Models loaded successfully!")
-except Exception as e:
-    print(f"Warning: Model pre-loading failed: {e}")
-    print("Models will be loaded on first request.")
+load_model()
+print("Models loaded successfully!")
 
 # Start RunPod serverless
 runpod.serverless.start({"handler": handler})
