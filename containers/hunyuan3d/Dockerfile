@@ -5,6 +5,7 @@ FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
 ENV PYTHONUNBUFFERED=1
 ENV HF_HOME=/runpod-volume/huggingface
+ENV HY3DGEN_MODELS=/runpod-volume/hy3dgen_models
 ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # System dependencies for CUDA extension builds and mesh processing
