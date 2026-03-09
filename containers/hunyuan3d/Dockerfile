@@ -1,7 +1,7 @@
 # Hunyuan3D 2.1 RunPod Serverless Container
 # Image/text-to-3D mesh generation using Tencent Hunyuan3D 2.1
 
-FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
+FROM runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel-ubuntu22.04
 
 ENV PYTHONUNBUFFERED=1
 ENV HF_HOME=/runpod-volume/huggingface
