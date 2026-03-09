@@ -1,6 +1,6 @@
 # Hunyuan3D 2.1 dependencies for RunPod serverless inference
 # Based on upstream requirements.txt with serverless-specific adjustments:
-# - Removed bpy (no Blender needed in container)
+# - bpy pinned to 4.3.0 (upstream pins 4.0 which doesn't exist on PyPI)
 # - Removed gradio/fastapi/uvicorn (RunPod SDK handles serving)
 # - Removed deepspeed (training only)
 # - Added --ignore-installed for base image conflicts
@@ -42,6 +42,8 @@ tqdm==4.66.5
 psutil==6.0.0
 
 cupy-cuda12x==13.4.1
+
+bpy==4.3.0
 
 onnxruntime==1.16.3
 torchmetrics==1.6.0
