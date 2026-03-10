@@ -52,7 +52,7 @@ def load_model():
         shape_pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
             SHAPE_MODEL,
         )
-        shape_pipeline = shape_pipeline.to("cuda")
+        shape_pipeline.to("cuda")
 
         load_time = time.time() - start_time
         print(f"Shape pipeline loaded in {load_time:.2f}s")
