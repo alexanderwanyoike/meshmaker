@@ -1,7 +1,7 @@
 """
 RunPod Serverless Handler for Hunyuan3D 2.1
 
-Generates 3D GLB models from images or text prompts using Tencent's Hunyuan3D 2.1.
+Generates 3D GLB models from images using Tencent's Hunyuan3D 2.1.
 Shape model (3.3B) generates geometry, Paint pipeline textures it with PBR materials.
 """
 
@@ -112,17 +112,15 @@ def decode_image(image_input: str):
 
 
 def generate_3d(
-    image_input: str | None = None,
-    text: str | None = None,
+    image_input: str,
     seed: int | None = None,
     texture: bool = True,
 ) -> dict[str, Any]:
     """
-    Generate a 3D GLB model from an input image or text prompt.
+    Generate a 3D GLB model from an input image.
 
     Args:
-        image_input: Base64-encoded image or URL (optional if text provided)
-        text: Text prompt for text-to-3D (optional if image provided)
+        image_input: Base64-encoded image or URL
         seed: Random seed for reproducibility
         texture: Whether to apply texture via Paint model (default True)
 
@@ -150,19 +148,14 @@ def generate_3d(
 
     generator = torch.Generator(device="cuda").manual_seed(seed)
 
-    # Decode input image if provided
-    image = None
-    if image_input:
-        print("Decoding input image...")
-        image = decode_image(image_input)
-        print(f"Image size: {image.size}, mode: {image.mode}")
+    # Decode input image
+    print("Decoding input image...")
+    image = decode_image(image_input)
+    print(f"Image size: {image.size}, mode: {image.mode}")
 
-    mode = "image-to-3D" if image is not None else "text-to-3D"
-    print(f"Generating 3D model ({mode})...")
+    print("Generating 3D model (image-to-3D)...")
     print(f"  Seed: {seed}")
     print(f"  Texture: {texture}")
-    if text:
-        print(f"  Prompt: {text}")
 
     start_time = time.time()
 
@@ -170,13 +163,7 @@ def generate_3d(
     print("Running shape generation...")
     shape_start = time.time()
 
-    shape_kwargs = dict(generator=generator)
-    if image is not None:
-        shape_kwargs["image"] = image
-    if text:
-        shape_kwargs["prompt"] = text
-
-    mesh = shape_pipeline(**shape_kwargs)
+    mesh = shape_pipeline(image=image, generator=generator)
     if isinstance(mesh, (list, tuple)):
         mesh = mesh[0]
 
@@ -247,7 +234,7 @@ def generate_3d(
         "glb": glb_base64,
         "metadata": {
             "seed": seed,
-            "mode": mode,
+            "mode": "image-to-3D",
             "texture": texture,
             "shape_time": round(shape_time, 2),
             "paint_time": round(paint_time, 2),
@@ -263,17 +250,15 @@ def handler(job: dict) -> dict:
     """RunPod serverless handler."""
     job_input = job.get("input", {})
 
-    # Get inputs - either image or text is required
+    # Image is required (Hunyuan3D 2.1 is image-to-3D only)
     image_input = job_input.get("image")
-    text = job_input.get("text")
 
-    if not image_input and not text:
-        return {"error": "Missing required field: provide 'image' (base64/URL) or 'text' (prompt), or both"}
+    if not image_input:
+        return {"error": "Missing required field: 'image' (base64 or URL)"}
 
     # Extract parameters
     params = {
         "image_input": image_input,
-        "text": text,
         "seed": job_input.get("seed"),
         "texture": job_input.get("texture", True),
     }

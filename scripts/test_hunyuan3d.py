@@ -1,17 +1,10 @@
 #!/usr/bin/env python3
 """
 Test client for Hunyuan3D 2.1 RunPod endpoint.
-Supports image-to-3D and text-to-3D generation.
+Image-to-3D mesh generation.
 
 Usage:
-    # Image to 3D:
     python scripts/test_hunyuan3d.py input.png output.glb
-
-    # Text to 3D:
-    python scripts/test_hunyuan3d.py --text "a wooden chair" output.glb
-
-    # Image + text prompt:
-    python scripts/test_hunyuan3d.py input.png output.glb --text "make it metallic"
 
 Environment:
     RUNPOD_API_KEY:          Your RunPod API key
@@ -95,9 +88,8 @@ def submit_and_poll(api_key, endpoint_id, payload):
 
 def main():
     parser = argparse.ArgumentParser(description="Test Hunyuan3D 2.1 RunPod endpoint")
-    parser.add_argument("input_image", nargs="?", help="Path to input image (optional for text-to-3D)")
+    parser.add_argument("input_image", help="Path to input image")
     parser.add_argument("output_glb", help="Path for output GLB file")
-    parser.add_argument("--text", help="Text prompt (required for text-to-3D, optional with image)")
     parser.add_argument("--no-texture", action="store_true", help="Skip texture generation")
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
     parser.add_argument("--endpoint", help="RunPod endpoint ID (or set HUNYUAN3D_ENDPOINT_ID)")
@@ -113,28 +105,19 @@ def main():
     if not endpoint_id:
         print("Error: HUNYUAN3D_ENDPOINT_ID not set", file=sys.stderr)
         sys.exit(1)
-    if not args.input_image and not args.text:
-        print("Error: Provide an input image, --text prompt, or both", file=sys.stderr)
-        sys.exit(1)
 
     # Build payload
-    payload_input = {
-        "texture": not args.no_texture,
-    }
-
-    if args.input_image:
-        print(f"Reading {args.input_image}...")
-        with open(args.input_image, "rb") as f:
-            payload_input["image"] = base64.b64encode(f.read()).decode("utf-8")
-
-    if args.text:
-        payload_input["text"] = args.text
+    print(f"Reading {args.input_image}...")
+    with open(args.input_image, "rb") as f:
+        payload_input = {
+            "image": base64.b64encode(f.read()).decode("utf-8"),
+            "texture": not args.no_texture,
+        }
 
     if args.seed is not None:
         payload_input["seed"] = args.seed
 
-    mode = "image+text" if args.input_image and args.text else "image" if args.input_image else "text"
-    print(f"Submitting {mode}-to-3D job to Hunyuan3D 2.1...")
+    print("Submitting image-to-3D job to Hunyuan3D 2.1...")
 
     output, elapsed = submit_and_poll(api_key, endpoint_id, {"input": payload_input})
 
@@ -151,7 +134,7 @@ def main():
 
     meta = output.get("metadata", {})
     print(f"\nSuccess!")
-    print(f"  Mode:             {meta.get('mode', mode)}")
+    print(f"  Mode:             {meta.get('mode', 'image-to-3D')}")
     print(f"  Total time:       {elapsed:.1f}s")
     if "shape_time" in meta:
         print(f"  Shape time:       {meta['shape_time']:.1f}s")
