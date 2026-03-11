@@ -43,9 +43,11 @@ ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0+PTX"
 RUN cd /app/hunyuan3d/hy3dpaint/custom_rasterizer && \
     pip install --no-cache-dir --no-build-isolation .
 
-# Build CUDA extensions: DifferentiableRenderer
+# Build C++ extension: DifferentiableRenderer mesh_inpaint_processor
 RUN cd /app/hunyuan3d/hy3dpaint/DifferentiableRenderer && \
-    bash compile_mesh_painter.sh
+    bash compile_mesh_painter.sh && \
+    ls -la mesh_inpaint_processor*.so && \
+    python3 -c "from mesh_inpaint_processor import meshVerticeInpaint; print('mesh_inpaint_processor OK')"
 
 # Download RealESRGAN for texture upscaling
 RUN wget -q https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth \
