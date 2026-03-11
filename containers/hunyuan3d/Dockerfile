@@ -45,8 +45,13 @@ RUN cd /app/hunyuan3d/hy3dpaint/custom_rasterizer && \
     pip install --no-cache-dir --no-build-isolation .
 
 # Build C++ extension: DifferentiableRenderer mesh_inpaint_processor
+# compile_mesh_painter.sh uses python3-config which may point to system Python.
+# Build directly with the correct Python to ensure matching ABI suffix.
 RUN cd /app/hunyuan3d/hy3dpaint/DifferentiableRenderer && \
-    bash compile_mesh_painter.sh && \
+    c++ -O3 -Wall -shared -std=c++11 -fPIC \
+        $(python3 -m pybind11 --includes) \
+        mesh_inpaint_processor.cpp \
+        -o mesh_inpaint_processor$(python3 -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))") && \
     ls -la mesh_inpaint_processor*.so && \
     python3 -c "from mesh_inpaint_processor import meshVerticeInpaint; print('mesh_inpaint_processor OK')"
 
