@@ -172,6 +172,7 @@ def generate_3d(
 
     # Texture generation (Paint)
     paint_time = 0.0
+    output_path = None
     if texture and paint_pipeline is not None:
         print("Running texture generation...")
         paint_start = time.time()
@@ -188,7 +189,7 @@ def generate_3d(
             image.save(image_path)
             paint_kwargs["image_path"] = image_path
 
-        mesh = paint_pipeline(**paint_kwargs)
+        output_path = paint_pipeline(**paint_kwargs)
 
         # Clean up temp files
         os.unlink(mesh_path)
@@ -198,19 +199,23 @@ def generate_3d(
         paint_time = time.time() - paint_start
         print(f"Texture generation completed in {paint_time:.2f}s")
 
-    # Export to GLB
-    print("Exporting to GLB...")
+    # Read GLB output
+    print("Reading GLB output...")
     export_start = time.time()
 
-    with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:
-        tmp_path = tmp.name
+    if texture and output_path:
+        # Paint pipeline returns a file path to the textured GLB
+        glb_path = output_path
+    else:
+        # No texture — export untextured mesh from trimesh
+        with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:
+            glb_path = tmp.name
+        mesh.export(glb_path)
 
-    mesh.export(tmp_path)
-
-    with open(tmp_path, "rb") as f:
+    with open(glb_path, "rb") as f:
         glb_bytes = f.read()
 
-    os.unlink(tmp_path)
+    os.unlink(glb_path)
 
     export_time = time.time() - export_start
     print(f"GLB export completed in {export_time:.2f}s")
