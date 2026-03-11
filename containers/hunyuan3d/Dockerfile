@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     git-lfs \
     ninja-build \
     cmake \
+    python3-dev \
     libjpeg-dev libpng-dev \
     libgl1-mesa-glx libglib2.0-0 libegl1-mesa-dev \
     libxrender1 libsm6 libxext6 libxi6 libxxf86vm1 libxfixes3 libxkbcommon0 \
