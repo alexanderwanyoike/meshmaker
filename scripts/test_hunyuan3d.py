@@ -92,6 +92,9 @@ def main():
     parser.add_argument("output_glb", help="Path for output GLB file")
     parser.add_argument("--no-texture", action="store_true", help="Skip texture generation")
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
+    parser.add_argument("--octree-resolution", type=int, default=None, help="Mesh detail (default 384, try 512 for higher detail)")
+    parser.add_argument("--steps", type=int, default=None, help="Diffusion steps (default 50)")
+    parser.add_argument("--guidance-scale", type=float, default=None, help="Guidance scale (default 5.0)")
     parser.add_argument("--endpoint", help="RunPod endpoint ID (or set HUNYUAN3D_ENDPOINT_ID)")
     parser.add_argument("--api-key", help="RunPod API key (or set RUNPOD_API_KEY)")
     args = parser.parse_args()
@@ -116,6 +119,12 @@ def main():
 
     if args.seed is not None:
         payload_input["seed"] = args.seed
+    if args.octree_resolution is not None:
+        payload_input["octree_resolution"] = args.octree_resolution
+    if args.steps is not None:
+        payload_input["num_inference_steps"] = args.steps
+    if args.guidance_scale is not None:
+        payload_input["guidance_scale"] = args.guidance_scale
 
     print("Submitting image-to-3D job to Hunyuan3D 2.1...")
 
@@ -142,6 +151,9 @@ def main():
         print(f"  Paint time:       {meta['paint_time']:.1f}s")
     print(f"  Seed:             {meta.get('seed', 'n/a')}")
     print(f"  Texture:          {meta.get('texture', not args.no_texture)}")
+    print(f"  Octree res:       {meta.get('octree_resolution', 'n/a')}")
+    print(f"  Steps:            {meta.get('num_inference_steps', 'n/a')}")
+    print(f"  Guidance:         {meta.get('guidance_scale', 'n/a')}")
     print(f"  GLB size:         {len(glb_bytes) / 1024 / 1024:.2f} MB")
     print(f"  Output:           {args.output_glb}")
 

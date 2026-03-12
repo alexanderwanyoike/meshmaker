@@ -115,6 +115,9 @@ def generate_3d(
     image_input: str,
     seed: int | None = None,
     texture: bool = True,
+    octree_resolution: int = 384,
+    num_inference_steps: int = 50,
+    guidance_scale: float = 5.0,
 ) -> dict[str, Any]:
     """
     Generate a 3D GLB model from an input image.
@@ -123,6 +126,9 @@ def generate_3d(
         image_input: Base64-encoded image or URL
         seed: Random seed for reproducibility
         texture: Whether to apply texture via Paint model (default True)
+        octree_resolution: Mesh extraction resolution (default 384, higher = more detail)
+        num_inference_steps: Diffusion sampling steps (default 50)
+        guidance_scale: Classifier-free guidance scale (default 5.0)
 
     Returns:
         Dictionary with base64-encoded GLB and metadata
@@ -156,6 +162,9 @@ def generate_3d(
     print("Generating 3D model (image-to-3D)...")
     print(f"  Seed: {seed}")
     print(f"  Texture: {texture}")
+    print(f"  Octree resolution: {octree_resolution}")
+    print(f"  Inference steps: {num_inference_steps}")
+    print(f"  Guidance scale: {guidance_scale}")
 
     start_time = time.time()
 
@@ -163,7 +172,13 @@ def generate_3d(
     print("Running shape generation...")
     shape_start = time.time()
 
-    mesh = shape_pipeline(image=image, generator=generator)
+    mesh = shape_pipeline(
+        image=image,
+        generator=generator,
+        octree_resolution=octree_resolution,
+        num_inference_steps=num_inference_steps,
+        guidance_scale=guidance_scale,
+    )
     if isinstance(mesh, (list, tuple)):
         mesh = mesh[0]
 
@@ -204,8 +219,12 @@ def generate_3d(
     export_start = time.time()
 
     if texture and output_path:
-        # Paint pipeline returns a file path to the textured GLB
-        glb_path = output_path
+        # Paint pipeline returns OBJ path; GLB is saved alongside it with .glb extension
+        glb_path = output_path.replace(".obj", ".glb")
+        if not os.path.exists(glb_path):
+            raise FileNotFoundError(
+                f"Expected GLB at {glb_path} (paint returned {output_path})"
+            )
     else:
         # No texture — export untextured mesh from trimesh
         with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:
@@ -215,7 +234,17 @@ def generate_3d(
     with open(glb_path, "rb") as f:
         glb_bytes = f.read()
 
+    # Clean up output files
     os.unlink(glb_path)
+    if texture and output_path:
+        # Remove OBJ and companion texture files from paint pipeline
+        for path in [output_path,
+                     output_path.replace(".obj", ".mtl"),
+                     output_path.replace(".obj", ".jpg"),
+                     output_path.replace(".obj", "_metallic.jpg"),
+                     output_path.replace(".obj", "_roughness.jpg")]:
+            if os.path.exists(path):
+                os.unlink(path)
 
     export_time = time.time() - export_start
     print(f"GLB export completed in {export_time:.2f}s")
@@ -241,6 +270,9 @@ def generate_3d(
             "seed": seed,
             "mode": "image-to-3D",
             "texture": texture,
+            "octree_resolution": octree_resolution,
+            "num_inference_steps": num_inference_steps,
+            "guidance_scale": guidance_scale,
             "shape_time": round(shape_time, 2),
             "paint_time": round(paint_time, 2),
             "export_time": round(export_time, 2),
@@ -266,6 +298,9 @@ def handler(job: dict) -> dict:
         "image_input": image_input,
         "seed": job_input.get("seed"),
         "texture": job_input.get("texture", True),
+        "octree_resolution": job_input.get("octree_resolution", 384),
+        "num_inference_steps": job_input.get("num_inference_steps", 50),
+        "guidance_scale": job_input.get("guidance_scale", 5.0),
     }
 
     try:
