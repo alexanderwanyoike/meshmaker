@@ -35,11 +35,14 @@ RUN pip install --no-cache-dir \
     scikit-learn \
     safetensors \
     huggingface_hub \
+    tqdm \
+    omegaconf \
     runpod>=1.6.0
 
-# Build chamfer3D CUDA extension (required for mesh-to-point-cloud projection)
+# Build chamfer3D CUDA extension with verification
 RUN cd /app/hunyuan3d-part/P3-SAM/utils/chamfer3D && \
-    python setup.py install
+    python setup.py install && \
+    python -c "import chamfer_3D; print('chamfer_3D OK')"
 
 COPY handler.py /app/handler.py
 WORKDIR /app
