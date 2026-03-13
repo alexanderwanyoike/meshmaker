@@ -42,7 +42,7 @@ RUN pip install --no-cache-dir \
 # Build chamfer3D CUDA extension with verification
 RUN cd /app/hunyuan3d-part/P3-SAM/utils/chamfer3D && \
     python setup.py install && \
-    python -c "import chamfer_3D; print('chamfer_3D OK')"
+    python -c "import torch; import chamfer_3D; print('chamfer_3D OK')"
 
 COPY handler.py /app/handler.py
 WORKDIR /app
