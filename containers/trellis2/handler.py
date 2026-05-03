@@ -97,6 +97,13 @@ def generate_3d(
     seed: int | None = None,
     decimation_target: int = 100_000,
     texture_size: int = 1024,
+    steps: int = 12,
+    sparse_steps: int | None = None,
+    shape_steps: int | None = None,
+    tex_steps: int | None = None,
+    sparse_guidance: float = 7.5,
+    shape_guidance: float = 7.5,
+    tex_guidance: float = 1.0,
 ) -> dict[str, Any]:
     """
     Generate a 3D GLB model from an input image.
@@ -154,26 +161,33 @@ def generate_3d(
 
     start_time = time.time()
 
+    # Resolve per-group step counts (fall back to global `steps` if not overridden).
+    s_steps = sparse_steps if sparse_steps is not None else steps
+    h_steps = shape_steps if shape_steps is not None else steps
+    t_steps = tex_steps if tex_steps is not None else steps
+    print(f"  Steps: sparse={s_steps} shape={h_steps} tex={t_steps}")
+    print(f"  Guidance: sparse={sparse_guidance} shape={shape_guidance} tex={tex_guidance}")
+
     # Run the pipeline
     # pipeline.run() returns a list of MeshWithVoxel objects
     outputs = pipeline.run(
         image,
         seed=seed,
         sparse_structure_sampler_params={
-            "steps": 12,
-            "guidance_strength": 7.5,
+            "steps": s_steps,
+            "guidance_strength": sparse_guidance,
             "guidance_rescale": 0.7,
             "rescale_t": 5.0,
         },
         shape_slat_sampler_params={
-            "steps": 12,
-            "guidance_strength": 7.5,
+            "steps": h_steps,
+            "guidance_strength": shape_guidance,
             "guidance_rescale": 0.5,
             "rescale_t": 3.0,
         },
         tex_slat_sampler_params={
-            "steps": 12,
-            "guidance_strength": 1.0,
+            "steps": t_steps,
+            "guidance_strength": tex_guidance,
             "guidance_rescale": 0.0,
             "rescale_t": 3.0,
         },
@@ -277,6 +291,13 @@ def handler(job: dict) -> dict:
         "seed": job_input.get("seed"),
         "decimation_target": job_input.get("decimation_target", 100_000),
         "texture_size": job_input.get("texture_size", 1024),
+        "steps": job_input.get("steps", 12),
+        "sparse_steps": job_input.get("sparse_steps"),
+        "shape_steps": job_input.get("shape_steps"),
+        "tex_steps": job_input.get("tex_steps"),
+        "sparse_guidance": job_input.get("sparse_guidance", 7.5),
+        "shape_guidance": job_input.get("shape_guidance", 7.5),
+        "tex_guidance": job_input.get("tex_guidance", 1.0),
     }
 
     try:

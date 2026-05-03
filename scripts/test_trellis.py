@@ -33,6 +33,20 @@ def main():
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
     parser.add_argument("--decimation", type=int, default=100000,
                         help="Target face count for mesh decimation (default: 100000)")
+    parser.add_argument("--steps", type=int, default=12,
+                        help="Sampler steps applied to all 3 stages unless overridden per-stage (default 12)")
+    parser.add_argument("--sparse-steps", type=int, default=None,
+                        help="Override steps for sparse_structure stage")
+    parser.add_argument("--shape-steps", type=int, default=None,
+                        help="Override steps for shape_slat stage")
+    parser.add_argument("--tex-steps", type=int, default=None,
+                        help="Override steps for tex_slat stage")
+    parser.add_argument("--sparse-guidance", type=float, default=7.5,
+                        help="Guidance strength for sparse_structure stage (default 7.5)")
+    parser.add_argument("--shape-guidance", type=float, default=7.5,
+                        help="Guidance strength for shape_slat stage (default 7.5)")
+    parser.add_argument("--tex-guidance", type=float, default=1.0,
+                        help="Guidance strength for tex_slat stage (default 1.0)")
     parser.add_argument("--endpoint", help="RunPod endpoint ID (or set TRELLIS_ENDPOINT_ID)")
     parser.add_argument("--api-key", help="RunPod API key (or set RUNPOD_API_KEY)")
     args = parser.parse_args()
@@ -62,6 +76,16 @@ def main():
     if args.seed is not None:
         payload_input["seed"] = args.seed
     payload_input["decimation_target"] = args.decimation
+    payload_input["steps"] = args.steps
+    if args.sparse_steps is not None:
+        payload_input["sparse_steps"] = args.sparse_steps
+    if args.shape_steps is not None:
+        payload_input["shape_steps"] = args.shape_steps
+    if args.tex_steps is not None:
+        payload_input["tex_steps"] = args.tex_steps
+    payload_input["sparse_guidance"] = args.sparse_guidance
+    payload_input["shape_guidance"] = args.shape_guidance
+    payload_input["tex_guidance"] = args.tex_guidance
 
     # Submit job
     print(f"Submitting to RunPod endpoint {endpoint_id}...")
