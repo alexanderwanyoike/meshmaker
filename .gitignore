@@ -31,9 +31,6 @@ output/
 # Keep stats files for container builds
 !containers/hymotion/stats/*.npy
 
-# Notes
-.notes/
-
 # Claude
 .claude/
 
