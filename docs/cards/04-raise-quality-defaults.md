@@ -1,30 +1,32 @@
-# Card 04 - Raise quality defaults
+# Card 04 - Archive old generator quality-default tuning
 
-Status: TODO
+Status: ARCHIVED
 Depends on: 02 (transport ceiling must be gone first)
 Quality bar: Meshy-6 meshes
 
 ## Goal
 
-Now that assets travel by URL, raise the conservative generation defaults that were only low to fit the 20MB response.
+Do not spend implementation time tuning Trellis2 or Hunyuan3D 2.1 defaults while the
+project is scoped to a single new Generate backend: Hunyuan3D 3.5.
 
 ## Why
 
-Defaults were tuned for the transport limit, not for quality: Trellis `resolution=512`, `steps=12`, `texture_size=1024`; Hunyuan `octree_resolution=384`. This is free quality once card 02 lands.
+The old defaults were tuned for the base64 transport limit, but these backends are no
+longer the target path. Improving them would make the project broader without making
+the MVP clearer.
 
 ## Scope
 
-- Trellis2: default `resolution=1024`, raise `steps`, allow `texture_size` up to 4096.
-- Hunyuan3D: default `octree_resolution=512`, keep `num_inference_steps`/`guidance` sane.
-- Expose these in the Generate panel as quality presets (Draft / Standard / High) so users trade speed vs fidelity explicitly.
-- Re-check decimation target (currently 100k) - make it a preset-linked value, not a hard cap.
+- Leave old Trellis2/Hunyuan3D 2.1 code as reference until Hunyuan3D 3.5 is integrated.
+- Do not add Draft / Standard / High presets for the old generators.
+- Remove or archive old generator UI once the Hunyuan3D 3.5 path is working.
 
 ## Acceptance criteria
 
-- "High" preset produces visibly higher fidelity than the old defaults on the same input image.
-- Generation time is acceptable per preset and documented.
-- No regression in import.
+- No active task depends on tuning Trellis2 or Hunyuan3D 2.1.
+- The active Generate plan points only to card 06.
 
 ## Notes
 
-This card is where you first eyeball progress toward the Meshy-6 bar with your *existing* models, before adding new ones (card 06).
+Revisit only if Hunyuan3D 3.5 access fails and an old self-hosted generator must
+temporarily become the fallback.

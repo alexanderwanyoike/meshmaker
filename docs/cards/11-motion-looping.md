@@ -1,6 +1,6 @@
 # Card 11 - Looping + foot-contact cleanup
 
-Status: TODO
+Status: TODO (BACKLOG)
 Depends on: 03 (motion core)
 Quality bar: Cascadeur-grade animation
 

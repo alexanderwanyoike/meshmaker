@@ -8,15 +8,15 @@
 
 | Model | Origin | License | Quality | Notes |
 |---|---|---|---|---|
-| **Trellis 2** (current) | Microsoft | MIT | Very good geometry, darker textures | O-Voxel + DiT. Cleaner topology than Hunyuan. 3-17s on H100 |
-| **Hunyuan3D 2.1** (current) | Tencent | Permissive commercial | Better PBR textures than Trellis | Flow-matching DiT + Paint. Full training code released |
-| **Hunyuan3D 3.5** | Tencent | Open | Top tier | Sub-60s, up to 8K PBR textures. Upgrade target |
-| **Pixal3D** | TencentARC / Tsinghua | Open | Near-reconstruction fidelity | SIGGRAPH 2026. Pixel-aligned: back-projects image features into 3D for direct pixel-to-3D correspondence. Best fidelity-to-input. Primary Generate upgrade |
+| **Trellis 2** (legacy) | Microsoft | MIT | Very good geometry, darker textures | O-Voxel + DiT. Keep as reference only unless Hunyuan3D 3.5 access fails |
+| **Hunyuan3D 2.1** (legacy) | Tencent | Permissive commercial | Better PBR textures than Trellis | Flow-matching DiT + Paint. Keep as reference only unless Hunyuan3D 3.5 access fails |
+| **Hunyuan3D 3.5** | Tencent | TBD | Target | Only active Generate target. Access path must be confirmed before implementation |
+| **Pixal3D** | TencentARC / Tsinghua | Open | Near-reconstruction fidelity | Deferred. Do not add unless the single-generator plan fails |
 | **Hunyuan3D-Omni** | Tencent | Open | Controllable | "ControlNet of 3D": point cloud / voxel / bbox / pose conditioning |
 | **TripoSG** | VAST-AI | MIT | High-fidelity shape only | 1.5B rectified flow, no texture |
 | **TripoSR / Stable Fast 3D** | VAST-AI / Stability | MIT / community | Lower, very fast | <0.5-1s. Good for previews |
 
-**Takeaway:** Pixal3D (fidelity) and Hunyuan3D 3.5 (8K PBR, speed) are the two backends to add for the Meshy-6 quality bar. Keep Trellis2 as a baseline to A/B against.
+**Current takeaway:** keep Generate scoped to Hunyuan3D 3.5 only. Do not build a Trellis/Pixal3D/Meshy/Tripo A/B harness for the focused build.
 
 ### Commercial platforms (the bar / fallback providers)
 
@@ -27,7 +27,7 @@
 | **Rodin/Hyper3D** | $99/mo | Yes | Photorealistic 4K PBR |
 | **3DAI Studio** | $14/mo, 1000 credits | Aggregator | The "router" model, already exists |
 
-These are also the **fallback providers** in MeshMaker's router: when self-hosted output can't match, route the job to Meshy/Tripo.
+These are background market references, not active fallback providers. Do not build Meshy/Tripo routing until the single-generator pipeline works and there is a concrete reason to add a second Generate provider.
 
 ## 2. Rig (mesh -> rigged)
 

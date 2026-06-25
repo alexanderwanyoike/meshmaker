@@ -1,6 +1,6 @@
 # Card 10 - Build the Video -> Animation core (QuickMagic style)
 
-Status: TODO
+Status: TODO (BACKLOG)
 Depends on: 03 (video stub + shared retarget), 01 (provider abstraction)
 Quality bar: Cascadeur-grade animation
 
