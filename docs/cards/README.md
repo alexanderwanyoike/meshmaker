@@ -10,8 +10,8 @@ that output usable.
 - **06** - Replace Generate with one backend: Hunyuan3D 3.5
 - **05** - Texture preservation through the rig roundtrip, only if rigging degrades output
 
-## Deferred / archived for now
-- **03** - Restructure repo into the 5 cores (defer until it reduces friction)
+## Backlog / not in the current slice
+- **03** - Restructure repo into the 5 cores (do when it reduces friction)
 - **04** - Raise old Trellis/Hunyuan3D 2.1 quality defaults (archived with old generators)
 - **07** - Swap Rig backend MIA -> SkinTokens
 - **08** - Expose Segment tuning knobs (P3-SAM)
@@ -21,6 +21,6 @@ that output usable.
 - **12** - Addons backlog
 
 ## Status legend
-Each card starts `Status: TODO`, unless it has been explicitly deferred or archived.
+Each card starts `Status: TODO`, unless it has been explicitly archived.
 The active quality bar is: Hunyuan3D 3.5 output should be production-usable enough to
 justify continuing the pipeline.

@@ -1,6 +1,6 @@
 # Card 09 - Plug in Meshy / Tripo as external providers
 
-Status: DEFERRED
+Status: TODO (BACKLOG)
 Depends on: 01 (provider abstraction), 02 (URL transport)
 Quality bar: Meshy-6 meshes (this *is* the fallback to guarantee it)
 

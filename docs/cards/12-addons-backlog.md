@@ -1,6 +1,6 @@
 # Card 12 - Addons backlog
 
-Status: DEFERRED (parking lot - promote individual items to their own cards when picked up)
+Status: TODO (BACKLOG - promote individual items to their own cards when picked up)
 Depends on: the relevant core being solid
 Quality bar: n/a (toppings, not cores)
 
