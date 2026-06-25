@@ -1,6 +1,6 @@
 # Card 03 - Restructure repo into the 5 cores
 
-Status: TODO
+Status: DEFERRED
 Depends on: 01 (providers exist to anchor the cores)
 Quality bar: enables both (navigability, not quality directly)
 

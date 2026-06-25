@@ -1,4 +1,4 @@
-# Card 06 - Add Pixal3D / Hunyuan3D 3.5 as Generate backends
+# Card 06 - Replace Generate with Hunyuan3D 3.5
 
 Status: TODO
 Depends on: 01 (provider abstraction), 02 (URL transport)
@@ -6,25 +6,32 @@ Quality bar: Meshy-6 meshes
 
 ## Goal
 
-Add the newest generation models as providers and A/B them against Trellis2 to chase the Meshy-6 fidelity bar.
+Make Hunyuan3D 3.5 the only active Generate backend.
 
 ## Why
 
-Pixal3D (SIGGRAPH 2026) is pixel-aligned - near-reconstruction fidelity to the input image, the main weakness of Trellis/Hunyuan. Hunyuan3D 3.5 brings sub-60s generation and up to 8K PBR. See REFERENCE section 1.
+MeshMaker needs a small, working pipeline more than a router full of experiments.
+Trellis2, Hunyuan3D 2.1, Pixal3D, Meshy, and Tripo are out of scope for the first
+focused build.
 
 ## Scope
 
-- New container `containers/pixal3d/` with a handler matching the Generate contract (image -> URL to GLB, URL transport from day one).
-- Optionally upgrade the Hunyuan container to 3.5.
-- Register both as Generate providers (card 01).
-- Build a small A/B harness: same input image through Trellis2 / Pixal3D / Hunyuan3D 3.5, compare fidelity + texture quality side by side.
+- Confirm the real access path for Hunyuan3D 3.5: official open-source weights/container,
+  Tencent-hosted API, or another approved endpoint. Do not assume the old Hunyuan3D 2.1
+  container can simply be renamed.
+- Implement one Generate provider: `Hunyuan3D35`.
+- Implement or adapt one handler/client path that returns an `Asset` URL plus metadata
+  from day one.
+- Remove the Generate backend dropdown unless there is a real second active provider.
+- Archive Trellis2 and Hunyuan3D 2.1 from active UI/config after the 3.5 path works.
 
 ## Acceptance criteria
 
-- User can pick the Generate backend from the panel dropdown.
-- Documented A/B comparison on a handful of reference images showing where each model wins.
-- At least one configuration that subjectively matches Meshy 6 on typical inputs.
+- Generate has exactly one active backend in the Blender UI: Hunyuan3D 3.5.
+- Generated output imports from an asset URL, not base64.
+- Old generator endpoint preferences are no longer required for the main Generate path.
 
 ## Notes
 
-Don't delete Trellis2 - keep it as a fast/baseline option. The router's value is choice per input.
+As of the June 25, 2026 planning pass, an official open-source Hunyuan3D 3.5 repo/weights
+path was not verified. Treat access as the first implementation checkpoint.

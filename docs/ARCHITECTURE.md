@@ -4,13 +4,13 @@
 
 ## The one organizing idea: capability -> provider
 
-The project's spine is a single abstraction. Stop organizing code **by model** (a Trellis handler, a Hunyuan handler, a MIA handler, each with bespoke operators). Organize it **by capability, with a swappable provider behind each.**
+The project's spine is a small abstraction. Stop organizing UI code **by model** (a Trellis handler, a Hunyuan handler, a MIA handler, each with bespoke operators). Organize it **by capability**, with one active provider per capability for the focused build.
 
 - A **capability** is one of the 5 cores: Generate, Segment, Rig, Motion, VideoMotion.
-- A **provider** is a concrete backend that fulfils a capability: `RunPodTrellis`, `RunPodHunyuan`, `Pixal3D`, `MeshyCloud`, `TripoCloud`, `RunPodMIA`, `RunPodSkinTokens`, etc.
-- A provider **declares which capabilities it supports** and how to invoke them. The Blender UI asks "who can Generate?" and shows the user a dropdown.
+- A **provider** is a concrete backend that fulfils a capability: `Hunyuan3D35`, `RunPodMIA`, `RunPodHYMotion`, etc.
+- A provider **declares which capabilities it supports** and how to invoke them. For now, Generate has exactly one active provider: Hunyuan3D 3.5. Do not add a backend dropdown unless there is a real second active provider.
 
-This is what makes MeshMaker a router rather than a pile of scripts. Every new idea becomes obvious to place: it's a new **capability**, a new **provider**, or a **UI/addon** change. Nothing floats.
+This is what keeps MeshMaker from becoming a pile of scripts. Every new idea becomes obvious to place: it is a new **capability**, a replacement **provider**, or a **UI/addon** change. Nothing floats.
 
 ### The provider interface (target)
 
@@ -42,11 +42,11 @@ Each core is a vertical slice: Blender UI + provider bindings on the client, and
 meshmaker/                     # Blender addon (the client)
   __init__.py                  # entry point, tab registration
   api.py                       # RunPod + storage transport (stdlib only)
-  preferences.py               # endpoint IDs + keys + storage config
+  preferences.py               # active endpoint IDs + keys + storage config
   providers/                   # NEW: the provider abstraction
     base.py                    #   Provider, Capability, request/response types
     runpod.py                  #   RunPod-backed providers (one per container)
-    cloud.py                   #   external providers (Meshy, Tripo)
+    cloud.py                   #   deferred external providers, if revived later
     registry.py                #   discovery: which providers support what
   core/
     generate/                  # Core 1: image -> mesh    (was mesh/)
@@ -57,8 +57,8 @@ meshmaker/                     # Blender addon (the client)
   retarget/                    # shared: motion -> rigged character (used by 4 and 5)
 
 containers/                    # RunPod serverless handlers (the backends)
-  trellis2/      hunyuan3d/    # Generate
-  pixal3d/                     #   (NEW)
+  hunyuan3d35/                 # Generate target, once access path is confirmed
+  trellis2/      hunyuan3d/    # Legacy Generate references, not active targets
   hunyuan3d-part/              # Segment
   mia/  skintokens/            # Rig (skintokens NEW)
   hymotion/                    # Motion (+ retarget_fbx.py, shared)
@@ -72,9 +72,9 @@ Naming: the current addon uses `mesh/`, `anim/` tab names. Target renames them t
 ```
 Blender (core UI)
   -> build a typed Request with quality knobs
-  -> Provider.<capability>(req)        # registry picks the backend the user chose
+  -> Provider.<capability>(req)        # registry picks the single active backend
        RunPod provider:  POST /run -> poll /status -> backend writes output to object storage
-       Cloud provider:   call Meshy/Tripo REST -> their URL
+       Cloud provider:   deferred
   -> Asset{ url, metadata }            # always a URL, never base64
   -> client downloads from url, imports into the scene
 ```
@@ -90,10 +90,10 @@ Core 4 (Text -> Motion) and Core 5 (Video -> Animation) are different **front en
 ## Backend swap rules (so quality upgrades stay contained)
 
 - **Rig backends must output a Mixamo-compatible skeleton** (`mixamorig:Hips` hierarchy). This is why MIA was chosen over UniRig: HY-Motion's retargeting expects Mixamo bone names. When swapping MIA -> SkinTokens, verify its skeleton maps into that retarget path, or add a mapping. (See REFERENCE for the MIA/UniRig/SkinTokens detail.)
-- **Generate backends must return a URL to a GLB** with PBR textures. Geometry/topology and texture resolution are the differentiators; the contract is the same.
-- **External cloud providers (Meshy/Tripo)** are just providers that call someone else's REST API and return their URL. They're the fallback when self-hosted output can't hit the quality bar.
+- **Generate must return a URL to a GLB** with PBR textures. For the focused build, this means Hunyuan3D 3.5 only.
+- **External cloud providers (Meshy/Tripo)** are deferred. Do not build fallback routing until the single-generator pipeline works.
 
 ## Quality bars, made concrete
 
-- **Generate (Meshy 6 tier):** newest models (Pixal3D / Hunyuan3D 3.5) + the transport rule + full settings (resolution >= 1024, texture_size up to 4096). A/B self-hosted vs Meshy/Tripo per input; route to the winner.
+- **Generate:** Hunyuan3D 3.5 + the transport rule + full settings. No A/B harness until there is a real need for a second Generate provider.
 - **Motion (Cascadeur-grade):** a clean Mixamo FBX with no catastrophic foot-sliding is enough; the human polishes in Cascadeur/Blender. Looping (card 11) and foot-contact cleanup raise it further.

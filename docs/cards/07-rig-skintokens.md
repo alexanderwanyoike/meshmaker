@@ -1,6 +1,6 @@
 # Card 07 - Swap Rig backend MIA -> SkinTokens
 
-Status: TODO
+Status: DEFERRED
 Depends on: 01 (provider abstraction)
 Quality bar: enables better rigs (feeds the Cascadeur-grade animation bar)
 

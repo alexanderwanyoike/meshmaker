@@ -1,6 +1,6 @@
 # Card 08 - Expose Segment tuning knobs
 
-Status: TODO
+Status: DEFERRED
 Depends on: 01 (provider abstraction)
 Quality bar: n/a (usability of the Segment core)
 
