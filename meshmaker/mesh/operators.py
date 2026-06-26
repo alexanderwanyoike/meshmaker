@@ -6,35 +6,34 @@ import tempfile
 import threading
 
 import bpy
-from bpy.props import EnumProperty, IntProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 from bpy.types import Operator
 
 from .. import ADDON_ID, api
 from ..providers import registry
-from ..providers.base import Capability, GenerateRequest
+from ..providers.base import GenerateRequest
 
 PREVIEW_NAME = "MeshMaker Preview"
 
 # ---------------------------------------------------------------------------
-# Model registry - derived from provider metadata for current Generate backends.
+# Model registry - derived from the registered Generate providers.
 # ---------------------------------------------------------------------------
-_GENERATE_PROVIDERS = registry.providers_for(Capability.GENERATE)
+_GENERATE_PROVIDERS = registry.list_providers()
 MESH_MODELS = {
     provider.id: {
         "label": provider.name,
         "description": provider.description,
-        "pref_field": provider.endpoint_pref_field,
-        "supports_text": getattr(provider, "supports_text", False),
-        "supports_image": getattr(provider, "supports_image", True),
+        "api_key_field": provider.api_key_pref_field,
     }
     for provider in _GENERATE_PROVIDERS
 }
 
-# Blender EnumProperty items built from registry
+# Blender EnumProperty items built from the registry
 MESH_MODEL_ITEMS = [
     (key, info["label"], info["description"])
     for key, info in MESH_MODELS.items()
 ]
+_DEFAULT_MODEL = MESH_MODEL_ITEMS[0][0] if MESH_MODEL_ITEMS else ""
 
 
 def _cleanup_preview():
@@ -190,7 +189,7 @@ class MESHMAKER_OT_clear_preview(Operator):
 class MESHMAKER_OT_generate_mesh(Operator):
     bl_idname = "meshmaker.generate_mesh"
     bl_label = "Generate 3D Mesh"
-    bl_description = "Generate a 3D mesh from an image using the selected model"
+    bl_description = "Generate a 3D mesh from an image using the selected provider"
 
     image_path: StringProperty(
         name="Image",
@@ -198,31 +197,18 @@ class MESHMAKER_OT_generate_mesh(Operator):
         subtype='FILE_PATH',
     )
 
-    resolution: EnumProperty(
-        name="Resolution",
-        items=[
-            ('512', "512", "Fast, lower quality"),
-            ('1024', "1024", "Balanced"),
-            ('1536', "1536", "Slow, higher quality"),
-        ],
-        default='512',
+    face_count: IntProperty(
+        name="Face Count",
+        description="Target polygon count for the generated mesh",
+        default=50000,
+        min=40000,
+        max=500000,
     )
 
-    texture_size: EnumProperty(
-        name="Texture Size",
-        items=[
-            ('1024', "1024", "Smaller file size"),
-            ('2048', "2048", "Balanced (default)"),
-            ('4096', "4096", "High quality textures"),
-        ],
-        default='2048',
-    )
-
-    seed: IntProperty(
-        name="Seed",
-        description="Random seed (0 = random)",
-        default=0,
-        min=0,
+    enable_pbr: BoolProperty(
+        name="PBR Materials",
+        description="Request PBR material maps (may cost extra)",
+        default=False,
     )
 
     # Internal state (not shown in UI)
@@ -233,66 +219,56 @@ class MESHMAKER_OT_generate_mesh(Operator):
 
     def execute(self, context):
         prefs = context.preferences.addons[ADDON_ID].preferences
-        api_key = prefs.runpod_api_key
 
         wm = context.window_manager
         model_key = wm.meshmaker_model_backend
         model = MESH_MODELS[model_key]
-        provider = registry.resolve(Capability.GENERATE, model_key)
-        endpoint_id = getattr(prefs, model["pref_field"], "")
+        provider = registry.resolve(model_key)
+        api_key = getattr(prefs, model["api_key_field"], "")
 
         if not api_key:
-            self.report({'ERROR'}, "RunPod API key not set. Check addon preferences.")
-            return {'CANCELLED'}
-        if not endpoint_id:
-            self.report({'ERROR'}, f"{model['label']} endpoint ID not set. Check addon preferences.")
+            self.report({'ERROR'}, f"{model['label']} API key not set. Check addon preferences.")
             return {'CANCELLED'}
 
-        # Resolve image path — fall back to preview if no explicit path
+        # Resolve image path - fall back to preview if no explicit path
         image_path = bpy.path.abspath(self.image_path) if self.image_path else ""
         if not image_path or not os.path.isfile(image_path):
             preview = bpy.data.images.get(PREVIEW_NAME)
             if preview is not None:
                 image_path = bpy.path.abspath(preview.filepath)
 
-        has_image = image_path and os.path.isfile(image_path)
-        text_prompt = wm.meshmaker_prompt.strip() if model["supports_text"] else ""
-
-        if not has_image and not text_prompt:
+        if not image_path or not os.path.isfile(image_path):
             self.report({'ERROR'}, "No image available. Generate or select one first.")
             return {'CANCELLED'}
 
-        image_bytes = None
-        if has_image:
-            with open(image_path, "rb") as f:
-                image_bytes = f.read()
+        with open(image_path, "rb") as f:
+            image_bytes = f.read()
 
         request = GenerateRequest(
             api_key=api_key,
-            endpoint_id=endpoint_id,
             image=image_bytes,
-            prompt=text_prompt or None,
-            resolution=int(self.resolution),
-            texture_size=int(self.texture_size),
-            seed=self.seed if self.seed > 0 else None,
+            face_count=self.face_count,
+            enable_pbr=self.enable_pbr,
         )
 
         # Reset state
-        MESHMAKER_OT_generate_mesh._thread = None
-        MESHMAKER_OT_generate_mesh._result = None
-        MESHMAKER_OT_generate_mesh._error = None
+        cls = MESHMAKER_OT_generate_mesh
+        cls._thread = None
+        cls._result = None
+        cls._error = None
 
         wm.meshmaker_status = f"Generating mesh ({model['label']})..."
 
         def run():
             try:
-                result = provider.generate(request)
-                MESHMAKER_OT_generate_mesh._result = result
+                asset = provider.generate(request)
+                glb_bytes = api.download(asset.url)
+                cls._result = (asset, glb_bytes)
             except Exception as e:
-                MESHMAKER_OT_generate_mesh._error = str(e)
+                cls._error = str(e)
 
-        MESHMAKER_OT_generate_mesh._thread = threading.Thread(target=run, daemon=True)
-        MESHMAKER_OT_generate_mesh._thread.start()
+        cls._thread = threading.Thread(target=run, daemon=True)
+        cls._thread.start()
 
         self._timer = wm.event_timer_add(0.5, window=context.window)
         wm.modal_handler_add(self)
@@ -303,7 +279,8 @@ class MESHMAKER_OT_generate_mesh(Operator):
             return {'PASS_THROUGH'}
 
         wm = context.window_manager
-        thread = MESHMAKER_OT_generate_mesh._thread
+        cls = MESHMAKER_OT_generate_mesh
+        thread = cls._thread
 
         if thread is not None and thread.is_alive():
             return {'PASS_THROUGH'}
@@ -311,30 +288,30 @@ class MESHMAKER_OT_generate_mesh(Operator):
         wm.event_timer_remove(self._timer)
         self._timer = None
 
-        error = MESHMAKER_OT_generate_mesh._error
+        error = cls._error
         if error:
             wm.meshmaker_status = f"Error: {error[:80]}"
             self.report({'ERROR'}, error)
             return {'CANCELLED'}
 
-        asset = MESHMAKER_OT_generate_mesh._result
-        if asset is None:
-            wm.meshmaker_status = "Error: no GLB in response"
-            self.report({'ERROR'}, "No GLB data in response")
+        result = cls._result
+        if result is None:
+            wm.meshmaker_status = "Error: no model in response"
+            self.report({'ERROR'}, "No model in response")
             return {'CANCELLED'}
+
+        asset, glb_bytes = result
 
         tmp = None
         try:
             tmp = tempfile.NamedTemporaryFile(suffix=".glb", delete=False)
-            tmp.write(asset.require_data())
+            tmp.write(glb_bytes)
             tmp.close()
 
             bpy.ops.import_scene.gltf(filepath=tmp.name)
 
-            meta = asset.metadata
-            seed_str = meta.get("seed", "n/a")
-            gen_time = meta.get("generation_time", meta.get("processing_time", "?"))
-            wm.meshmaker_status = f"Done (seed={seed_str}, {gen_time}s)"
+            seed_str = asset.metadata.get("seed", "n/a")
+            wm.meshmaker_status = f"Done (seed={seed_str})"
             self.report({'INFO'}, f"Mesh imported (seed={seed_str})")
 
         except Exception as e:
@@ -369,9 +346,9 @@ def register():
         description="Name of the preview image datablock",
     )
     wm.meshmaker_model_backend = EnumProperty(
-        name="Model",
+        name="Provider",
         items=MESH_MODEL_ITEMS,
-        default='TRELLIS2',
+        default=_DEFAULT_MODEL,
     )
 
 

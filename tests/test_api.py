@@ -1,4 +1,4 @@
-"""Tests for meshmaker/api.py — Gemini and RunPod API clients."""
+"""Tests for meshmaker/api.py - HTTP helpers and the Gemini client."""
 
 import base64
 import importlib.util
@@ -41,10 +41,6 @@ def _patch_retry():
 
 def _patch_sleep():
     return patch.object(api.time, "sleep")
-
-
-def _patch_monotonic():
-    return patch.object(api.time, "monotonic")
 
 
 class TestUrlOpenWithRetry(unittest.TestCase):
@@ -186,111 +182,68 @@ class TestCallGemini(unittest.TestCase):
             self.assertIn("key=mykey", req.full_url)
 
 
-class TestCallRunPod(unittest.TestCase):
-    def test_async_poll_completed(self):
-        with _patch_retry() as mock_fetch, _patch_sleep():
-            run_resp = _make_http_response({"id": "job-123", "status": "IN_QUEUE"})
-            status_resp = _make_http_response({
-                "status": "COMPLETED",
-                "output": {"glb": "abc123"},
-            })
-            mock_fetch.side_effect = [run_resp, status_resp]
-            result = api.call_runpod("key", "endpoint", {"input": {}})
-            self.assertEqual(result, {"glb": "abc123"})
-
-    def test_async_poll_in_progress_then_completed(self):
-        with _patch_retry() as mock_fetch, _patch_sleep():
-            run_resp = _make_http_response({"id": "job-123", "status": "IN_QUEUE"})
-            progress_resp = _make_http_response({"status": "IN_PROGRESS"})
-            done_resp = _make_http_response({
-                "status": "COMPLETED", "output": {"glb": "data"},
-            })
-            mock_fetch.side_effect = [run_resp, progress_resp, done_resp]
-            result = api.call_runpod("key", "endpoint", {"input": {}})
-            self.assertEqual(result, {"glb": "data"})
-            self.assertEqual(mock_fetch.call_count, 3)
-
-    def test_run_error_raises(self):
+class TestHttpHelpers(unittest.TestCase):
+    def test_post_json_sends_payload_and_headers(self):
         with _patch_retry() as mock_fetch:
-            mock_fetch.return_value = _make_http_response({"error": "bad input"})
-            with self.assertRaises(api.RunPodError):
-                api.call_runpod("key", "endpoint", {"input": {}})
-
-    def test_no_job_id_raises(self):
-        with _patch_retry() as mock_fetch:
-            mock_fetch.return_value = _make_http_response({"status": "UNKNOWN"})
-            with self.assertRaises(api.RunPodError) as ctx:
-                api.call_runpod("key", "endpoint", {"input": {}})
-            self.assertIn("No job ID", str(ctx.exception))
-
-    def test_job_failed_raises(self):
-        with _patch_retry() as mock_fetch, _patch_sleep():
-            run_resp = _make_http_response({"id": "job-1", "status": "IN_QUEUE"})
-            fail_resp = _make_http_response({"status": "FAILED", "error": "OOM"})
-            mock_fetch.side_effect = [run_resp, fail_resp]
-            with self.assertRaises(api.RunPodError) as ctx:
-                api.call_runpod("key", "endpoint", {"input": {}})
-            self.assertIn("Job failed", str(ctx.exception))
-
-    def test_completed_no_output_raises(self):
-        with _patch_retry() as mock_fetch, _patch_sleep():
-            run_resp = _make_http_response({"id": "job-1", "status": "IN_QUEUE"})
-            done_resp = _make_http_response({"status": "COMPLETED"})
-            mock_fetch.side_effect = [run_resp, done_resp]
-            with self.assertRaises(api.RunPodError) as ctx:
-                api.call_runpod("key", "endpoint", {"input": {}})
-            self.assertIn("output is empty", str(ctx.exception))
-
-    def test_timeout_raises(self):
-        with _patch_retry() as mock_fetch, _patch_sleep(), _patch_monotonic() as mock_time:
-            run_resp = _make_http_response({"id": "job-1", "status": "IN_QUEUE"})
-            progress_resp = _make_http_response({"status": "IN_PROGRESS"})
-            mock_fetch.side_effect = [run_resp, progress_resp, progress_resp]
-            # monotonic(): first call sets deadline, then loop checks exceed it
-            mock_time.side_effect = [0, 0, 100, 400]
-            with self.assertRaises(api.RunPodError) as ctx:
-                api.call_runpod("key", "endpoint", {"input": {}}, timeout=300)
-            self.assertIn("timed out", str(ctx.exception))
-
-    def test_poll_retries_on_any_exception(self):
-        """Transient poll failures (socket, read, DNS) are retried, not fatal."""
-        with _patch_retry() as mock_fetch, _patch_sleep():
-            run_resp = _make_http_response({"id": "job-1", "status": "IN_QUEUE"})
-            done_resp = _make_http_response({
-                "status": "COMPLETED", "output": {"glb": "ok"},
-            })
-            # Poll fails twice (different exception types), then succeeds
-            mock_fetch.side_effect = [
-                run_resp,
-                ConnectionResetError("reset"),
-                OSError("network unreachable"),
-                done_resp,
-            ]
-            result = api.call_runpod("key", "endpoint", {"input": {}})
-            self.assertEqual(result, {"glb": "ok"})
-            self.assertEqual(mock_fetch.call_count, 4)
-
-    def test_uses_run_endpoint(self):
-        with _patch_retry() as mock_fetch:
-            mock_fetch.return_value = _make_http_response(
-                {"id": "job-1", "status": "IN_QUEUE"}
+            mock_fetch.return_value = _make_http_response({"status_url": "s"})
+            result = api.http_post_json(
+                "https://queue.fal.run/model",
+                {"input_image_url": "data:..."},
+                {"Authorization": "Key abc"},
             )
-            try:
-                api.call_runpod("key", "ep123", {"input": {}}, timeout=0)
-            except api.RunPodError:
-                pass
-            req = mock_fetch.call_args[0][0]
-            self.assertIn("/run", req.full_url)
-            self.assertNotIn("/runsync", req.full_url)
+            self.assertEqual(result, {"status_url": "s"})
 
-    def test_http_error_raises(self):
+            req = mock_fetch.call_args[0][0]
+            self.assertEqual(req.full_url, "https://queue.fal.run/model")
+            self.assertEqual(req.get_method(), "POST")
+            payload = json.loads(req.data.decode("utf-8"))
+            self.assertEqual(payload["input_image_url"], "data:...")
+            # Header keys are normalized to capitalized form by urllib
+            self.assertEqual(req.headers["Authorization"], "Key abc")
+            self.assertEqual(req.headers["Content-type"], "application/json")
+
+    def test_get_json_sends_headers(self):
+        with _patch_retry() as mock_fetch:
+            mock_fetch.return_value = _make_http_response({"status": "COMPLETED"})
+            result = api.http_get_json("https://q/status", {"Authorization": "Key abc"})
+            self.assertEqual(result, {"status": "COMPLETED"})
+
+            req = mock_fetch.call_args[0][0]
+            self.assertEqual(req.get_method(), "GET")
+            self.assertEqual(req.headers["Authorization"], "Key abc")
+
+    def test_http_error_raises_httperror(self):
         with _patch_retry() as mock_fetch:
             mock_fetch.side_effect = urllib.error.HTTPError(
                 "url", 401, "Unauthorized", {}, io.BytesIO(b"bad key")
             )
-            with self.assertRaises(api.RunPodError) as ctx:
-                api.call_runpod("key", "endpoint", {"input": {}})
+            with self.assertRaises(api.HttpError) as ctx:
+                api.http_get_json("https://q/status")
             self.assertIn("HTTP 401", str(ctx.exception))
+
+    def test_download_returns_bytes(self):
+        with _patch_retry() as mock_fetch:
+            resp = MagicMock()
+            resp.read.return_value = b"glb-bytes"
+            resp.__enter__ = MagicMock(return_value=resp)
+            resp.__exit__ = MagicMock(return_value=False)
+            mock_fetch.return_value = resp
+
+            data = api.download("https://fal.media/model.glb")
+            self.assertEqual(data, b"glb-bytes")
+
+            req = mock_fetch.call_args[0][0]
+            self.assertEqual(req.full_url, "https://fal.media/model.glb")
+            self.assertEqual(req.get_method(), "GET")
+
+    def test_download_http_error_raises(self):
+        with _patch_retry() as mock_fetch:
+            mock_fetch.side_effect = urllib.error.HTTPError(
+                "url", 404, "Not Found", {}, io.BytesIO(b"gone")
+            )
+            with self.assertRaises(api.HttpError) as ctx:
+                api.download("https://fal.media/missing.glb")
+            self.assertIn("HTTP 404", str(ctx.exception))
 
 
 if __name__ == "__main__":

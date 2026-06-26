@@ -1,25 +1,5 @@
-"""Provider abstraction for MeshMaker backend capabilities."""
+"""Provider abstraction for MeshMaker Generate backends."""
 
-from .base import (
-    Asset,
-    Capability,
-    GenerateRequest,
-    MotionRequest,
-    MotionResult,
-    Provider,
-    RigRequest,
-    SegmentRequest,
-    SegmentResult,
-)
+from .base import Asset, GenerateRequest, Provider
 
-__all__ = [
-    "Asset",
-    "Capability",
-    "GenerateRequest",
-    "MotionRequest",
-    "MotionResult",
-    "Provider",
-    "RigRequest",
-    "SegmentRequest",
-    "SegmentResult",
-]
+__all__ = ["Asset", "GenerateRequest", "Provider"]

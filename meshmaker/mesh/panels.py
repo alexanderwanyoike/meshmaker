@@ -26,16 +26,15 @@ class MESHMAKER_PT_main(Panel):
 
         model_key = wm.meshmaker_model_backend
         model = MESH_MODELS[model_key]
-        endpoint_id = getattr(prefs, model["pref_field"], "")
 
-        missing_runpod = not prefs.runpod_api_key or not endpoint_id
+        missing_provider = not getattr(prefs, model["api_key_field"], "")
         missing_gemini = not prefs.gemini_api_key
 
-        if missing_runpod or missing_gemini:
+        if missing_provider or missing_gemini:
             if missing_gemini:
                 layout.label(text="Set Gemini key in preferences", icon='INFO')
-            if missing_runpod:
-                layout.label(text=f"Set RunPod key & {model['label']} endpoint", icon='INFO')
+            if missing_provider:
+                layout.label(text=f"Set {model['label']} API key", icon='INFO')
             layout.operator(
                 "preferences.addon_show",
                 text="Open Preferences",
@@ -43,8 +42,8 @@ class MESHMAKER_PT_main(Panel):
             ).module = ADDON_ID
             layout.separator()
 
-        # Model backend selector
-        layout.prop(wm, "meshmaker_model_backend", text="Model")
+        # Provider selector
+        layout.prop(wm, "meshmaker_model_backend", text="Provider")
 
         # Workflow toggle
         row = layout.row(align=True)
@@ -72,6 +71,11 @@ class MESHMAKER_PT_main(Panel):
             layout.label(text=status, icon='SORTTIME')
         else:
             layout.label(text=status, icon='INFO')
+
+    def _draw_settings(self, layout, wm):
+        layout.label(text="3D Settings:")
+        layout.prop(wm, "meshmaker_face_count", text="Face Count")
+        layout.prop(wm, "meshmaker_enable_pbr", text="PBR Materials")
 
     def _draw_generate_workflow(self, layout, wm, busy):
         preview = bpy.data.images.get(PREVIEW_NAME)
@@ -104,10 +108,7 @@ class MESHMAKER_PT_main(Panel):
             # 3D settings + generate
             layout.separator()
             col = layout.column(align=True)
-            col.label(text="3D Settings:")
-            col.prop(wm, "meshmaker_resolution", text="Resolution")
-            col.prop(wm, "meshmaker_texture_size", text="Texture Size")
-            col.prop(wm, "meshmaker_seed", text="Seed")
+            self._draw_settings(col, wm)
 
             layout.separator()
             row = layout.row(align=True)
@@ -120,9 +121,8 @@ class MESHMAKER_PT_main(Panel):
                 icon='MESH_MONKEY',
             )
             op.image_path = ""  # Will fall back to preview
-            op.resolution = wm.meshmaker_resolution
-            op.texture_size = wm.meshmaker_texture_size
-            op.seed = wm.meshmaker_seed
+            op.face_count = wm.meshmaker_face_count
+            op.enable_pbr = wm.meshmaker_enable_pbr
 
     def _draw_file_workflow(self, layout, wm, busy):
         col = layout.column(align=True)
@@ -130,10 +130,7 @@ class MESHMAKER_PT_main(Panel):
         col.prop(wm, "meshmaker_image_path", text="")
 
         col.separator()
-        col.label(text="Settings:")
-        col.prop(wm, "meshmaker_resolution", text="Resolution")
-        col.prop(wm, "meshmaker_texture_size", text="Texture Size")
-        col.prop(wm, "meshmaker_seed", text="Seed")
+        self._draw_settings(col, wm)
 
         layout.separator()
         row = layout.row(align=True)
@@ -146,9 +143,8 @@ class MESHMAKER_PT_main(Panel):
             icon='MESH_MONKEY',
         )
         op.image_path = wm.meshmaker_image_path
-        op.resolution = wm.meshmaker_resolution
-        op.texture_size = wm.meshmaker_texture_size
-        op.seed = wm.meshmaker_seed
+        op.face_count = wm.meshmaker_face_count
+        op.enable_pbr = wm.meshmaker_enable_pbr
 
 
 def register():
@@ -168,37 +164,24 @@ def register():
         description="Path to the reference image",
         subtype='FILE_PATH',
     )
-    wm.meshmaker_resolution = bpy.props.EnumProperty(
-        name="Resolution",
-        items=[
-            ('512', "512", "Fast, lower quality"),
-            ('1024', "1024", "Balanced"),
-            ('1536', "1536", "Slow, higher quality"),
-        ],
-        default='512',
+    wm.meshmaker_face_count = bpy.props.IntProperty(
+        name="Face Count",
+        description="Target polygon count for the generated mesh",
+        default=50000,
+        min=40000,
+        max=500000,
     )
-    wm.meshmaker_texture_size = bpy.props.EnumProperty(
-        name="Texture Size",
-        items=[
-            ('1024', "1024", "Smaller file size"),
-            ('2048', "2048", "Balanced (default)"),
-            ('4096', "4096", "High quality textures"),
-        ],
-        default='2048',
-    )
-    wm.meshmaker_seed = bpy.props.IntProperty(
-        name="Seed",
-        description="Random seed (0 = random)",
-        default=0,
-        min=0,
+    wm.meshmaker_enable_pbr = bpy.props.BoolProperty(
+        name="PBR Materials",
+        description="Request PBR material maps (may cost extra)",
+        default=False,
     )
 
 
 def unregister():
     wm = bpy.types.WindowManager
-    del wm.meshmaker_seed
-    del wm.meshmaker_texture_size
-    del wm.meshmaker_resolution
+    del wm.meshmaker_enable_pbr
+    del wm.meshmaker_face_count
     del wm.meshmaker_image_path
     del wm.meshmaker_workflow
 

@@ -1,4 +1,9 @@
-"""API clients for RunPod and Gemini (shared across all subpackages)."""
+"""HTTP transport for MeshMaker (stdlib only).
+
+Two concerns live here: generic JSON/asset HTTP helpers used by the hosted
+providers (Fal, Meshy), and the Gemini client used to generate concept images.
+No third-party dependencies so the addon installs as a plain Blender zip.
+"""
 
 import base64
 import json
@@ -25,82 +30,48 @@ def _urlopen_with_retry(req, timeout):
     raise urllib.error.URLError("DNS resolution failed after retries")
 
 
-class RunPodError(Exception):
+class HttpError(Exception):
     pass
 
 
-def call_runpod(api_key, endpoint_id, payload, timeout=600):
-    """Call a RunPod serverless endpoint and return the result.
-
-    Submits via /run (async) then polls /status until completion.
-    Uses only stdlib (urllib) so there are no external dependencies.
-
-    Args:
-        api_key: RunPod API key.
-        endpoint_id: RunPod endpoint ID.
-        payload: Dict with the "input" key for the endpoint.
-        timeout: Max seconds to wait for the job to complete.
-
-    Returns:
-        The output dict from the RunPod response.
-
-    Raises:
-        RunPodError: On API errors, timeouts, or missing output.
-    """
-    url = f"https://api.runpod.ai/v2/{endpoint_id}/run"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-
+def _request_json(req, timeout):
     try:
-        with _urlopen_with_retry(req, timeout=60) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
+        with _urlopen_with_retry(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
-        raise RunPodError(f"HTTP {e.code}: {body}") from e
+        raise HttpError(f"HTTP {e.code}: {body}") from e
     except urllib.error.URLError as e:
-        raise RunPodError(f"Connection error: {e.reason}") from e
+        raise HttpError(f"Connection error: {e.reason}") from e
 
-    if "error" in result:
-        raise RunPodError(result["error"])
 
-    job_id = result.get("id")
-    if not job_id:
-        raise RunPodError("No job ID in response")
+def http_post_json(url, payload, headers=None, timeout=120):
+    """POST a JSON body and return the parsed JSON response."""
+    merged = {"Content-Type": "application/json"}
+    if headers:
+        merged.update(headers)
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers=merged, method="POST")
+    return _request_json(req, timeout)
 
-    # Poll for completion. The COMPLETED response includes the full output
-    # (20MB+ base64 GLB), so we use a generous read timeout and catch ALL
-    # exceptions — any transient failure (DNS, socket timeout, incomplete
-    # read, connection reset) just triggers a retry on the next iteration.
-    status_url = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
-    deadline = time.monotonic() + timeout
 
-    while time.monotonic() < deadline:
-        time.sleep(5)
+def http_get_json(url, headers=None, timeout=120):
+    """GET a URL and return the parsed JSON response."""
+    req = urllib.request.Request(url, headers=headers or {}, method="GET")
+    return _request_json(req, timeout)
 
-        try:
-            status_req = urllib.request.Request(status_url, headers=headers)
-            with _urlopen_with_retry(status_req, timeout=90) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-        except Exception:
-            # Any failure during polling (DNS, socket, read, parse) —
-            # retry on next iteration instead of crashing
-            continue
 
-        status = result.get("status")
-        if status == "COMPLETED":
-            output = result.get("output")
-            if output is None:
-                raise RunPodError("Job completed but output is empty")
-            return output
-        elif status == "FAILED":
-            raise RunPodError(f"Job failed: {json.dumps(result, default=str)}")
-
-    raise RunPodError(f"Job {job_id} timed out after {timeout}s")
+def download(url, timeout=600):
+    """Download a URL and return its raw bytes (for hosted GLB assets)."""
+    req = urllib.request.Request(url, method="GET")
+    try:
+        with _urlopen_with_retry(req, timeout=timeout) as resp:
+            return resp.read()
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        raise HttpError(f"HTTP {e.code}: {body}") from e
+    except urllib.error.URLError as e:
+        raise HttpError(f"Connection error: {e.reason}") from e
 
 
 class GeminiError(Exception):
@@ -112,7 +83,7 @@ def call_gemini(api_key, model, prompt, image_b64=None, timeout=120):
 
     Args:
         api_key: Gemini API key.
-        model: Model name (e.g. "gemini-2.5-flash-preview-image-generation").
+        model: Model name (e.g. "gemini-2.5-flash-image").
         prompt: Text prompt for generation or editing.
         image_b64: Optional base64-encoded image for editing mode.
         timeout: Request timeout in seconds.

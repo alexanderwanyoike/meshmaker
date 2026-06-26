@@ -1,82 +1,85 @@
 # MeshMaker
 
-Open-source AI character pipeline for Blender. Generate 3D meshes from images or text, auto-rig them, animate them, and segment them into parts — all from the Blender sidebar. AI models run on [RunPod](https://www.runpod.io/) serverless GPUs.
+Open-source Blender addon that generates 3D meshes from images using hosted AI
+providers. Type a prompt (or pick an image), and a textured mesh lands in your
+scene. Bring your own API keys; nothing runs on your GPU.
 
 ```
-Image/Text ──→ 3D Mesh ──→ Rigged Character ──→ Animated Character
-                  │
-                  └──→ Part Segmentation
+Prompt ──→ Gemini image ──→ 3D mesh
+                             ▲
+Image file ──────────────────┘
 ```
 
-## Models
+MeshMaker is **Generate-only by design**. Rigging, animation, and segmentation
+are handled by separate, focused tools.
 
-| Model | Task | Container | GPU | License |
-|-------|------|-----------|-----|---------|
-| [Trellis 2](https://github.com/microsoft/TRELLIS.2) (4B) | Image → 3D mesh | `containers/trellis2/` | 48GB+ (A100/H100) | MIT |
-| [Hunyuan3D 2.1](https://github.com/Tencent/Hunyuan3D-2) | Image/text → 3D mesh | `containers/hunyuan3d/` | 48GB+ (A6000/A100/H100) | Tencent |
-| [MIA](https://github.com/jasongzy/Make-It-Animatable) | Mesh → rigged FBX | `containers/mia/` | 24GB+ | Apache 2.0 |
-| [HY-Motion 1.0](https://github.com/Tencent-Hunyuan/HY-Motion-1.0) | Text → animation | `containers/hymotion/` | 24GB+ | Tencent |
-| [Hunyuan3D-Part](https://github.com/Tencent/Hunyuan3D-2) (P3-SAM) | Mesh → part segments | `containers/hunyuan3d-part/` | 24GB+ | Tencent |
+## Providers
 
-## Repo Structure
+| Provider | Model | Endpoint | Key |
+|----------|-------|----------|-----|
+| **Fal** | Hunyuan3D 3.1 Pro | `fal-ai/hunyuan-3d/v3.1/pro/image-to-3d` | Fal API key |
+| **Meshy** | Image to 3D (textured) | `api.meshy.ai/openapi/v1/image-to-3d` | Meshy API key |
+
+Both return a hosted GLB URL, which the addon downloads and imports. Adding
+another Generate provider is one class in `meshmaker/providers/cloud.py` plus one
+line in `registry.py`.
+
+## Repo structure
 
 ```
 meshmaker/                    # Blender addon (install as zip)
-├── __init__.py               # Unified entry point
-├── api.py                    # Shared RunPod + Gemini API client
-├── preferences.py            # All endpoint IDs + API keys
-├── mesh/                     # MeshMaker tab (image/text → 3D)
-├── rig/                      # RigMaker tab (mesh → rigged)
-├── anim/                     # AnimMaker tab (rig → animated)
-└── segment/                  # PartMaker tab (mesh → parts)
-containers/
-├── trellis2/                 # Trellis 2 RunPod container
-├── hunyuan3d/                # Hunyuan3D 2.1 RunPod container
-├── mia/                      # Make It Animatable RunPod container
-├── hymotion/                 # HY-Motion RunPod container
-└── hunyuan3d-part/           # P3-SAM part segmentation container
-scripts/                      # CLI test scripts
+├── __init__.py               # entry point, panel/operator registration
+├── api.py                    # HTTP helpers + Gemini client (stdlib only)
+├── preferences.py            # Fal / Meshy / Gemini API keys
+├── mesh/                     # the MeshMaker tab (image/prompt → 3D)
+└── providers/                # the provider spine
+    ├── base.py               #   Provider, GenerateRequest, Asset
+    ├── cloud.py              #   FalHunyuan3DProvider, MeshyProvider
+    └── registry.py           #   the list of active providers
+docs/                         # vision, architecture, reference, cards
+tests/                        # provider mapping + HTTP helper tests
 ```
 
 ## Install
 
-1. Download `meshmaker.zip` from [Releases](../../releases), or build it yourself:
+1. Download `meshmaker.zip` from [Releases](../../releases), or build it:
    ```
    make meshmaker
    ```
-2. In Blender: **Edit → Preferences → Add-ons → Install from Disk** → select `meshmaker.zip`
+2. In Blender: **Edit > Preferences > Add-ons > Install from Disk** > select `meshmaker.zip`
 3. Enable **MeshMaker** in the addon list
-4. In addon preferences, configure:
-   - **RunPod API Key**
-   - **Endpoint IDs** for each model you want to use
-   - **Gemini API Key** (optional — for AI image generation)
+4. In addon preferences, set the keys you need:
+   - **Fal API Key** and/or **Meshy API Key** (the Generate providers)
+   - **Gemini API Key** (for the prompt → image step)
 
 ## Usage
 
-Open the sidebar (**N** key) to find four tabs:
+Open the sidebar (**N** key) and find the **MeshMaker** tab:
 
-| Tab | What it does |
-|-----|-------------|
-| **MeshMaker** | Generate 3D meshes from images or text. Supports Trellis 2 and Hunyuan3D 2.1 backends. |
-| **RigMaker** | Auto-rig a mesh with a Mixamo skeleton via MIA. |
-| **AnimMaker** | Animate a rigged character from a text prompt via HY-Motion. |
-| **PartMaker** | Segment a mesh into semantic parts via P3-SAM. |
+1. Pick a **Provider** (Fal or Meshy).
+2. Either type a prompt to generate a concept image with Gemini, or switch to
+   **Use File** and point at an image.
+3. Set **Face Count** and **PBR Materials**, then **Generate 3D**. The mesh
+   downloads from the provider's hosted URL and imports into your scene.
 
-## Deploy Containers
+## Adding a provider
 
-Each container has a CI workflow that builds and pushes to GHCR on push to `main` or `dev`. You can also build locally:
+```python
+# meshmaker/providers/cloud.py
+class MyProvider(Provider):
+    id = "MY_PROVIDER"
+    name = "My Provider"
+    api_key_pref_field = "my_api_key"   # add the StringProperty in preferences.py
 
+    def generate(self, req: GenerateRequest) -> Asset:
+        ...
+        return Asset(url=hosted_glb_url, format="glb")
 ```
-make trellis2        # or hunyuan3d, hunyuan3d-part, mia
-```
 
-To deploy on RunPod:
-
-1. Create a **Serverless Endpoint** in the RunPod console
-2. Set the container image to the GHCR URL (e.g. `ghcr.io/<owner>/trellis2:<tag>`)
-3. Select GPU tier per the table above
-4. Copy the endpoint ID into MeshMaker addon preferences
+Register the instance in `meshmaker/providers/registry.py` and it appears in the
+provider dropdown automatically.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Individual AI models have their own licenses (see [Models](#models) table).
+MIT - see [LICENSE](LICENSE). The hosted models (Hunyuan3D, Meshy) are governed
+by their providers' terms.

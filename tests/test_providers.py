@@ -1,6 +1,5 @@
-"""Tests for provider request/response mapping."""
+"""Tests for Generate provider request/response mapping (Fal, Meshy)."""
 
-import base64
 import importlib
 import os
 import sys
@@ -10,8 +9,8 @@ from unittest.mock import Mock, patch
 
 
 _ROOT = os.path.join(os.path.dirname(__file__), "..")
-_MESHMaker_DIR = os.path.join(_ROOT, "meshmaker")
-_PROVIDERS_DIR = os.path.join(_MESHMaker_DIR, "providers")
+_MESHMAKER_DIR = os.path.join(_ROOT, "meshmaker")
+_PROVIDERS_DIR = os.path.join(_MESHMAKER_DIR, "providers")
 
 
 def _install_fake_meshmaker_package():
@@ -21,7 +20,7 @@ def _install_fake_meshmaker_package():
             del sys.modules[name]
 
     meshmaker_pkg = types.ModuleType("meshmaker")
-    meshmaker_pkg.__path__ = [_MESHMaker_DIR]
+    meshmaker_pkg.__path__ = [_MESHMAKER_DIR]
     sys.modules["meshmaker"] = meshmaker_pkg
 
     providers_pkg = types.ModuleType("meshmaker.providers")
@@ -29,149 +28,176 @@ def _install_fake_meshmaker_package():
     sys.modules["meshmaker.providers"] = providers_pkg
 
     api_module = types.ModuleType("meshmaker.api")
-    api_module.call_runpod = Mock()
+    api_module.http_post_json = Mock()
+    api_module.http_get_json = Mock()
+    api_module.download = Mock()
     sys.modules["meshmaker.api"] = api_module
     meshmaker_pkg.api = api_module
 
 
 _install_fake_meshmaker_package()
 base = importlib.import_module("meshmaker.providers.base")
-runpod = importlib.import_module("meshmaker.providers.runpod")
+cloud = importlib.import_module("meshmaker.providers.cloud")
 registry = importlib.import_module("meshmaker.providers.registry")
 
 
 class TestProviderRegistry(unittest.TestCase):
     def test_lists_generate_providers(self):
-        providers = registry.providers_for(base.Capability.GENERATE)
-        self.assertEqual([provider.id for provider in providers], ["TRELLIS2", "HUNYUAN3D"])
+        ids = [provider.id for provider in registry.list_providers()]
+        self.assertEqual(ids, ["FAL_HUNYUAN3D", "MESHY"])
+
+    def test_resolve_default_is_first(self):
+        self.assertEqual(registry.resolve().id, "FAL_HUNYUAN3D")
 
     def test_resolves_specific_provider(self):
-        provider = registry.resolve(base.Capability.RIG, "MIA")
-        self.assertEqual(provider.name, "MIA")
+        self.assertEqual(registry.resolve("MESHY").id, "MESHY")
 
     def test_unknown_provider_raises(self):
         with self.assertRaises(LookupError):
-            registry.resolve(base.Capability.GENERATE, "NOPE")
+            registry.resolve("NOPE")
 
 
-class TestRunPodProviders(unittest.TestCase):
-    def _patch_runpod(self, response):
-        return patch.object(runpod.api, "call_runpod", return_value=response)
-
-    def test_generate_maps_request_and_decodes_asset(self):
-        glb_bytes = b"glb-data"
-        response = {
-            "glb": base64.b64encode(glb_bytes).decode("utf-8"),
-            "metadata": {"seed": 123},
-        }
-        req = base.GenerateRequest(
-            api_key="key",
-            endpoint_id="endpoint",
-            image=b"image-data",
-            prompt=None,
-            resolution=512,
-            texture_size=2048,
-            seed=123,
+class TestFalProvider(unittest.TestCase):
+    def setUp(self):
+        self.provider = cloud.FalHunyuan3DProvider()
+        self.req = base.GenerateRequest(
+            api_key="fal-key",
+            image=b"image-bytes",
+            face_count=60000,
+            enable_pbr=True,
         )
 
-        with self._patch_runpod(response) as mock_call:
-            asset = runpod.TRELLIS2.generate(req)
+    def test_generate_maps_request_and_response(self):
+        submit = {
+            "status_url": "https://queue.fal.run/.../status",
+            "response_url": "https://queue.fal.run/.../response",
+        }
+        status = {"status": "COMPLETED"}
+        result = {"model_glb": {"url": "https://fal.media/model.glb"}, "seed": 42}
 
+        with patch.object(cloud.api, "http_post_json", return_value=submit) as mock_post, \
+                patch.object(cloud.api, "http_get_json", side_effect=[status, result]):
+            asset = self.provider.generate(self.req)
+
+        self.assertEqual(asset.url, "https://fal.media/model.glb")
         self.assertEqual(asset.format, "glb")
-        self.assertEqual(asset.require_data(), glb_bytes)
-        self.assertEqual(asset.metadata, {"seed": 123})
+        self.assertEqual(asset.metadata["seed"], 42)
+        self.assertEqual(asset.metadata["provider"], "FAL_HUNYUAN3D")
 
-        payload = mock_call.call_args.args[2]
-        self.assertEqual(mock_call.call_args.args[:2], ("key", "endpoint"))
-        self.assertEqual(payload["input"]["resolution"], 512)
-        self.assertEqual(payload["input"]["texture_size"], 2048)
-        self.assertEqual(payload["input"]["seed"], 123)
+        url, payload, headers = mock_post.call_args.args[:3]
+        self.assertEqual(url, "https://queue.fal.run/fal-ai/hunyuan-3d/v3.1/pro/image-to-3d")
+        self.assertTrue(payload["input_image_url"].startswith("data:image/png;base64,"))
+        self.assertEqual(payload["face_count"], 60000)
+        self.assertTrue(payload["enable_pbr"])
+        self.assertEqual(headers["Authorization"], "Key fal-key")
+
+    def test_generate_falls_back_to_model_urls(self):
+        submit = {"status_url": "s", "response_url": "r"}
+        status = {"status": "COMPLETED"}
+        result = {"model_urls": {"glb": {"url": "https://fal.media/alt.glb"}}}
+
+        with patch.object(cloud.api, "http_post_json", return_value=submit), \
+                patch.object(cloud.api, "http_get_json", side_effect=[status, result]):
+            asset = self.provider.generate(self.req)
+
+        self.assertEqual(asset.url, "https://fal.media/alt.glb")
+
+    def test_polls_until_completed(self):
+        submit = {"status_url": "s", "response_url": "r"}
+        result = {"model_glb": {"url": "https://fal.media/model.glb"}}
+        get_responses = [
+            {"status": "IN_QUEUE"},
+            {"status": "IN_PROGRESS"},
+            {"status": "COMPLETED"},
+            result,
+        ]
+
+        with patch.object(cloud.api, "http_post_json", return_value=submit), \
+                patch.object(cloud.api, "http_get_json", side_effect=get_responses), \
+                patch.object(cloud.time, "sleep"):
+            asset = self.provider.generate(self.req)
+
+        self.assertEqual(asset.url, "https://fal.media/model.glb")
+
+    def test_missing_queue_urls_raises(self):
+        with patch.object(cloud.api, "http_post_json", return_value={}):
+            with self.assertRaises(cloud.ProviderError):
+                self.provider.generate(self.req)
+
+    def test_no_glb_url_raises(self):
+        submit = {"status_url": "s", "response_url": "r"}
+        with patch.object(cloud.api, "http_post_json", return_value=submit), \
+                patch.object(cloud.api, "http_get_json", side_effect=[{"status": "COMPLETED"}, {}]):
+            with self.assertRaises(cloud.ProviderError):
+                self.provider.generate(self.req)
+
+
+class TestMeshyProvider(unittest.TestCase):
+    def setUp(self):
+        self.provider = cloud.MeshyProvider()
+        self.req = base.GenerateRequest(
+            api_key="meshy-key",
+            image=b"image-bytes",
+            face_count=30000,
+            enable_pbr=False,
+        )
+
+    def test_generate_maps_request_and_response(self):
+        created = {"result": "task-123"}
+        task = {
+            "status": "SUCCEEDED",
+            "model_urls": {"glb": "https://assets.meshy.ai/task-123/model.glb"},
+            "consumed_credits": 30,
+        }
+
+        with patch.object(cloud.api, "http_post_json", return_value=created) as mock_post, \
+                patch.object(cloud.api, "http_get_json", return_value=task) as mock_get:
+            asset = self.provider.generate(self.req)
+
+        self.assertEqual(asset.url, "https://assets.meshy.ai/task-123/model.glb")
+        self.assertEqual(asset.metadata["task_id"], "task-123")
+        self.assertEqual(asset.metadata["consumed_credits"], 30)
+
+        url, payload, headers = mock_post.call_args.args[:3]
+        self.assertEqual(url, "https://api.meshy.ai/openapi/v1/image-to-3d")
+        self.assertTrue(payload["image_url"].startswith("data:image/png;base64,"))
+        self.assertEqual(payload["target_polycount"], 30000)
+        self.assertTrue(payload["should_texture"])
+        self.assertEqual(payload["target_formats"], ["glb"])
+        self.assertEqual(headers["Authorization"], "Bearer meshy-key")
+
+        # Poll URL includes the task id
         self.assertEqual(
-            base64.b64decode(payload["input"]["image"]),
-            b"image-data",
-        )
-        self.assertNotIn("text", payload["input"])
-
-    def test_rig_maps_output_asset(self):
-        fbx_bytes = b"fbx-data"
-        response = {
-            "output": base64.b64encode(fbx_bytes).decode("utf-8"),
-            "seed": 7,
-            "processing_time": 1.5,
-        }
-        req = base.RigRequest(
-            api_key="key",
-            endpoint_id="endpoint",
-            mesh=b"mesh-data",
-            seed=7,
+            mock_get.call_args.args[0],
+            "https://api.meshy.ai/openapi/v1/image-to-3d/task-123",
         )
 
-        with self._patch_runpod(response) as mock_call:
-            asset = runpod.MIA.rig(req)
+    def test_polls_until_succeeded(self):
+        created = {"result": "t1"}
+        get_responses = [
+            {"status": "PENDING"},
+            {"status": "IN_PROGRESS"},
+            {"status": "SUCCEEDED", "model_urls": {"glb": "https://m/model.glb"}},
+        ]
+        with patch.object(cloud.api, "http_post_json", return_value=created), \
+                patch.object(cloud.api, "http_get_json", side_effect=get_responses), \
+                patch.object(cloud.time, "sleep"):
+            asset = self.provider.generate(self.req)
+        self.assertEqual(asset.url, "https://m/model.glb")
 
-        self.assertEqual(asset.format, "fbx")
-        self.assertEqual(asset.require_data(), fbx_bytes)
-        self.assertEqual(asset.metadata["seed"], 7)
+    def test_failed_task_raises(self):
+        created = {"result": "t1"}
+        task = {"status": "FAILED", "task_error": {"message": "bad image"}}
+        with patch.object(cloud.api, "http_post_json", return_value=created), \
+                patch.object(cloud.api, "http_get_json", return_value=task):
+            with self.assertRaises(cloud.ProviderError) as ctx:
+                self.provider.generate(self.req)
+        self.assertIn("bad image", str(ctx.exception))
 
-        payload = mock_call.call_args.args[2]
-        self.assertEqual(base64.b64decode(payload["input"]["mesh"]), b"mesh-data")
-        self.assertEqual(payload["input"]["seed"], 7)
-
-    def test_motion_maps_animated_asset(self):
-        fbx_bytes = b"animated"
-        response = {
-            "animated_fbx": base64.b64encode(fbx_bytes).decode("utf-8"),
-            "metadata": {"num_frames": 90, "fps": 30},
-        }
-        req = base.MotionRequest(
-            api_key="key",
-            endpoint_id="endpoint",
-            prompt="walk",
-            character_fbx=b"character",
-            duration=3.0,
-            fps=30,
-            guidance_scale=7.5,
-            seed=None,
-        )
-
-        with self._patch_runpod(response) as mock_call:
-            result = runpod.HYMOTION.motion(req)
-
-        self.assertEqual(result.animated_asset.format, "fbx")
-        self.assertEqual(result.animated_asset.require_data(), fbx_bytes)
-        self.assertEqual(result.metadata["num_frames"], 90)
-
-        payload = mock_call.call_args.args[2]
-        self.assertEqual(payload["input"]["prompt"], "walk")
-        self.assertEqual(base64.b64decode(payload["input"]["character_fbx"]), b"character")
-        self.assertNotIn("seed", payload["input"])
-
-    def test_segment_maps_parts(self):
-        part_a = base64.b64encode(b"part-a").decode("utf-8")
-        part_b = base64.b64encode(b"part-b").decode("utf-8")
-        response = {
-            "parts": [
-                {"name": "head", "mesh": part_a, "face_count": 10},
-                {"name": "body", "mesh": part_b, "face_count": 20},
-            ],
-            "metadata": {"num_parts": 2},
-        }
-        req = base.SegmentRequest(
-            api_key="key",
-            endpoint_id="endpoint",
-            mesh=b"mesh-data",
-        )
-
-        with self._patch_runpod(response) as mock_call:
-            result = runpod.P3SAM.segment(req)
-
-        self.assertEqual([part.name for part in result.parts], ["head", "body"])
-        self.assertEqual(result.parts[0].require_data(), b"part-a")
-        self.assertEqual(result.parts[1].metadata["face_count"], 20)
-        self.assertEqual(result.metadata["num_parts"], 2)
-
-        payload = mock_call.call_args.args[2]
-        self.assertEqual(base64.b64decode(payload["input"]["mesh"]), b"mesh-data")
+    def test_no_task_id_raises(self):
+        with patch.object(cloud.api, "http_post_json", return_value={}):
+            with self.assertRaises(cloud.ProviderError):
+                self.provider.generate(self.req)
 
 
 if __name__ == "__main__":
