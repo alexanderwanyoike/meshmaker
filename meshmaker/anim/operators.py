@@ -1,6 +1,5 @@
 """Blender operators for AnimMaker."""
 
-import base64
 import os
 import tempfile
 import threading
@@ -10,7 +9,9 @@ import bpy
 from bpy.props import FloatProperty, IntProperty, StringProperty
 from bpy.types import Operator
 
-from .. import ADDON_ID, api
+from .. import ADDON_ID
+from ..providers import registry
+from ..providers.base import Capability, MotionRequest
 
 
 class ANIMMAKER_OT_animate(Operator):
@@ -29,6 +30,7 @@ class ANIMMAKER_OT_animate(Operator):
         prefs = context.preferences.addons[ADDON_ID].preferences
         api_key = prefs.runpod_api_key
         endpoint_id = prefs.hymotion_endpoint_id
+        provider = registry.resolve(Capability.MOTION, "HYMOTION")
 
         if not api_key:
             self.report({'ERROR'}, "RunPod API key not set. Check addon preferences.")
@@ -73,21 +75,21 @@ class ANIMMAKER_OT_animate(Operator):
                 bake_anim=False,
             )
             with open(tmp_fbx.name, "rb") as f:
-                character_fbx_b64 = base64.b64encode(f.read()).decode("utf-8")
+                character_fbx = f.read()
         finally:
             if os.path.exists(tmp_fbx.name):
                 os.unlink(tmp_fbx.name)
 
-        payload_input = {
-            "prompt": prompt,
-            "character_fbx": character_fbx_b64,
-            "duration": duration,
-            "fps": fps,
-            "guidance_scale": guidance,
-        }
-        if seed > 0:
-            payload_input["seed"] = seed
-        payload = {"input": payload_input}
+        request = MotionRequest(
+            api_key=api_key,
+            endpoint_id=endpoint_id,
+            prompt=prompt,
+            character_fbx=character_fbx,
+            duration=duration,
+            fps=fps,
+            guidance_scale=guidance,
+            seed=seed if seed > 0 else None,
+        )
 
         # Reset state
         cls = ANIMMAKER_OT_animate
@@ -101,7 +103,7 @@ class ANIMMAKER_OT_animate(Operator):
 
         def run():
             try:
-                result = api.call_runpod(api_key, endpoint_id, payload)
+                result = provider.motion(request)
                 cls._result = result
             except Exception as e:
                 cls._error = str(e)
@@ -136,22 +138,15 @@ class ANIMMAKER_OT_animate(Operator):
             self.report({'ERROR'}, error)
             return {'CANCELLED'}
 
-        result = cls._result
-        if not result:
+        motion = cls._result
+        if not motion:
             wm.animmaker_status = "Error: empty response"
             self.report({'ERROR'}, "Empty response from HY-Motion")
             return {'CANCELLED'}
 
-        # Extract animated FBX from server-side retarget result
-        animated_fbx_b64 = result.get("animated_fbx")
-        if not animated_fbx_b64:
-            wm.animmaker_status = "Error: no animated_fbx in response"
-            self.report({'ERROR'}, "No animated FBX in response")
-            return {'CANCELLED'}
-
         # Import animated FBX into scene
         existing = set(bpy.data.objects)
-        fbx_bytes = base64.b64decode(animated_fbx_b64)
+        fbx_bytes = motion.animated_asset.require_data()
         tmp = tempfile.NamedTemporaryFile(suffix=".fbx", delete=False)
         tmp.write(fbx_bytes)
         tmp.close()
@@ -184,7 +179,7 @@ class ANIMMAKER_OT_animate(Operator):
             context.view_layer.objects.active = new_armature
 
         # Set scene frame range from metadata
-        metadata = result.get("metadata", {})
+        metadata = motion.metadata
         num_frames = metadata.get("num_frames", 0)
         fps = metadata.get("fps", 30)
         if num_frames:
