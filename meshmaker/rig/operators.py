@@ -1,6 +1,5 @@
 """Blender operators for RigMaker."""
 
-import base64
 import os
 import tempfile
 import threading
@@ -10,7 +9,9 @@ import bpy
 from bpy.props import IntProperty, StringProperty
 from bpy.types import Operator
 
-from .. import ADDON_ID, api
+from .. import ADDON_ID
+from ..providers import registry
+from ..providers.base import Capability, RigRequest
 
 
 def _apply_rig(context, fbx_bytes, original_obj):
@@ -72,6 +73,7 @@ class RIGMAKER_OT_auto_rig(Operator):
         prefs = context.preferences.addons[ADDON_ID].preferences
         api_key = prefs.runpod_api_key
         endpoint_id = prefs.mia_endpoint_id
+        provider = registry.resolve(Capability.RIG, "MIA")
 
         if not api_key:
             self.report({'ERROR'}, "RunPod API key not set. Check addon preferences.")
@@ -98,7 +100,7 @@ class RIGMAKER_OT_auto_rig(Operator):
                 use_selection=True,
             )
             with open(tmp.name, "rb") as f:
-                mesh_b64 = base64.b64encode(f.read()).decode("utf-8")
+                mesh_bytes = f.read()
         finally:
             if os.path.exists(tmp.name):
                 os.unlink(tmp.name)
@@ -106,10 +108,12 @@ class RIGMAKER_OT_auto_rig(Operator):
         wm = context.window_manager
         seed = wm.rigmaker_seed
 
-        payload_input = {"mesh": mesh_b64}
-        if seed > 0:
-            payload_input["seed"] = seed
-        payload = {"input": payload_input}
+        request = RigRequest(
+            api_key=api_key,
+            endpoint_id=endpoint_id,
+            mesh=mesh_bytes,
+            seed=seed if seed > 0 else None,
+        )
 
         # Reset state
         cls = RIGMAKER_OT_auto_rig
@@ -123,7 +127,7 @@ class RIGMAKER_OT_auto_rig(Operator):
 
         def run():
             try:
-                result = api.call_runpod(api_key, endpoint_id, payload)
+                result = provider.rig(request)
                 cls._result = result
             except Exception as e:
                 cls._error = str(e)
@@ -159,14 +163,13 @@ class RIGMAKER_OT_auto_rig(Operator):
             return {'CANCELLED'}
 
         # Extract FBX
-        result = cls._result
-        fbx_b64 = result.get("output") if result else None
-        if not fbx_b64:
+        asset = cls._result
+        if asset is None:
             wm.rigmaker_status = "Error: no FBX in response"
             self.report({'ERROR'}, "No FBX data in response")
             return {'CANCELLED'}
 
-        fbx_bytes = base64.b64decode(fbx_b64)
+        fbx_bytes = asset.require_data()
 
         # Look up original object by name
         original_obj = bpy.data.objects.get(cls._original_obj_name)
@@ -185,7 +188,7 @@ class RIGMAKER_OT_auto_rig(Operator):
 
         elapsed = time.monotonic() - cls._start_time
         bone_count = len(armature.data.bones)
-        seed_val = result.get("seed", "n/a")
+        seed_val = asset.metadata.get("seed", "n/a")
         wm.rigmaker_status = f"Done ({bone_count} bones, {elapsed:.0f}s, seed={seed_val})"
         self.report({'INFO'}, f"Rig applied: {bone_count} bones")
 
