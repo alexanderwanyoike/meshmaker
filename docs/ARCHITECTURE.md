@@ -2,97 +2,98 @@
 
 > The "how" behind `VISION.md`. Read VISION first for the what/why.
 
-## The one organizing idea: capability -> provider
+## The one organizing idea: the provider spine
 
-The project's spine is a small abstraction. Stop organizing UI code **by model** (a Trellis handler, a Hunyuan handler, a MIA handler, each with bespoke operators). Organize it **by capability**, with one focused provider per capability for the current slice.
+MeshMaker does exactly one thing - image-to-3D - and organizes its code around a single small abstraction: the **provider**.
 
-- A **capability** is one of the 5 cores: Generate, Segment, Rig, Motion, VideoMotion.
-- A **provider** is a concrete backend that fulfils a capability: `FalHunyuan3D`, `MeshyGenerate`, `RunPodMIA`, `RunPodHYMotion`, etc.
-- A provider **declares which capabilities it supports** and how to invoke them. For now, Generate starts with Fal Hunyuan3D. Meshy is the first external-provider spike.
+- A **provider** is a concrete hosted backend that turns an image into a mesh: `FalHunyuan3DProvider`, `MeshyProvider`, and whatever comes next.
+- Every provider implements one method, `generate`, and declares which addon preference holds its API key.
+- The Blender UI never knows which provider it is talking to. It builds a typed `GenerateRequest`, the registry hands it a provider, and it gets back an `Asset`.
 
-This is what keeps MeshMaker from becoming a pile of scripts. Every new idea becomes obvious to place: it is a new **capability**, a replacement **provider**, or a **UI/addon** change. Nothing floats.
+This is what keeps MeshMaker from becoming a pile of scripts. A new idea is either a new **provider** or a **UI change**. Nothing floats.
 
-### The provider interface (target)
-
-A small base class. Every provider implements the capabilities it claims.
+## The provider interface
 
 ```python
+@dataclass(frozen=True)
+class Asset:
+    url: str                 # hosted GLB to download and import
+    format: str = "glb"
+    name: str | None = None
+    metadata: dict = ...
+
+@dataclass(frozen=True)
+class GenerateRequest:
+    api_key: str
+    image: bytes             # raw reference image; providers encode a data URI
+    face_count: int = 50000
+    enable_pbr: bool = False
+
 class Provider:
+    id: str
     name: str
-    capabilities: set[Capability]   # {Capability.GENERATE, ...}
+    api_key_pref_field: str  # which addon preference holds this provider's key
 
-    def supports(self, cap: Capability) -> bool: ...
-
-    # Each capability has one method with a stable signature.
-    # Providers implement only the ones they declare.
-    def generate(self, req: GenerateRequest) -> Asset: ...      # image -> mesh
-    def segment(self, req: SegmentRequest) -> list[Asset]: ...  # mesh -> parts
-    def rig(self, req: RigRequest) -> Asset: ...                # mesh -> rigged
-    def motion(self, req: MotionRequest) -> Motion: ...         # text -> motion
-    def video_motion(self, req: VideoRequest) -> Motion: ...    # video -> motion
+    def generate(self, req: GenerateRequest) -> Asset: ...
 ```
 
-Requests carry capability-specific quality knobs (resolution, steps, guidance, octree, etc.). `Asset` is always a URL + metadata (see transport rule below), never raw base64.
+`Asset` is always a hosted URL, never raw base64. Both Fal and Meshy accept the
+reference image as an inline base64 data URI, so there is no separate upload step.
 
-## Target repo layout (5 cores, self-contained)
-
-Each core is a vertical slice: Blender UI + provider bindings on the client, and one container per RunPod-hosted model. You should be able to open one core and work without touching the others.
+## Repo layout
 
 ```
 meshmaker/                     # Blender addon (the client)
-  __init__.py                  # entry point, tab registration
-  api.py                       # HTTP transport and asset download helpers (stdlib only)
-  preferences.py               # active endpoint IDs + keys + storage config
-  providers/                   # NEW: the provider abstraction
-    base.py                    #   Provider, Capability, request/response types
-    runpod.py                  #   RunPod-backed providers (one per container)
-    cloud.py                   #   Fal/Meshy hosted providers
-    registry.py                #   discovery: which providers support what
-  core/
-    generate/                  # Core 1: image -> mesh    (was mesh/)
-    segment/                   # Core 2: mesh -> parts     (was segment/)
-    rig/                       # Core 3: mesh -> rigged
-    motion/                    # Core 4: text -> motion    (was anim/)
-    video/                     # Core 5: video -> animation (NEW, stub first)
-  retarget/                    # shared: motion -> rigged character (used by 4 and 5)
-
-containers/                    # RunPod serverless handlers (the backends)
-  trellis2/      hunyuan3d/    # Legacy Generate references, not active targets
-  hunyuan3d-part/              # Segment
-  mia/  skintokens/            # Rig (skintokens NEW)
-  hymotion/                    # Motion (+ retarget_fbx.py, shared)
-  video-mocap/                 # VideoMotion (NEW)
+  __init__.py                  # entry point, panel/operator registration
+  api.py                       # HTTP helpers + Gemini client (stdlib only)
+  preferences.py               # Fal / Meshy / Gemini API keys
+  mesh/                        # the MeshMaker tab
+    operators.py               #   Gemini image-gen + generate-mesh operators
+    panels.py                  #   the sidebar UI
+  providers/                   # the provider spine
+    base.py                    #   Provider, GenerateRequest, Asset
+    cloud.py                   #   FalHunyuan3DProvider, MeshyProvider
+    registry.py                #   the active provider list
+docs/                          # vision, architecture, reference, cards
+tests/                         # provider mapping + HTTP helper tests
 ```
-
-Naming: the current addon uses `mesh/`, `anim/` tab names. Target renames them to the core names (`generate/`, `motion/`) so the code matches VISION's vocabulary. Card 03 covers the restructure.
 
 ## Data flow
 
 ```
-Blender (core UI)
-  -> build a typed Request with quality knobs
-  -> Provider.<capability>(req)        # registry picks the single active backend
-       Hosted provider: call Fal/Meshy REST -> their asset URL
-       RunPod provider: legacy MIA/HY-Motion/segment path, inline bytes until migrated
-  -> Asset{ url, metadata }            # always a URL, never base64
-  -> client downloads from url, imports into the scene
+Blender (MeshMaker tab)
+  -> (optional) prompt -> api.call_gemini -> concept image
+  -> build GenerateRequest{ api_key, image, face_count, enable_pbr }
+  -> registry.resolve(provider_id).generate(req)
+       Fal:   POST queue.fal.run/{model} -> poll status_url -> GET response_url
+       Meshy: POST api.meshy.ai/.../image-to-3d -> poll task -> read model_urls.glb
+  -> Asset{ url, metadata }            # always a hosted URL
+  -> api.download(url) -> temp .glb -> bpy.ops.import_scene.gltf
 ```
 
-### The transport rule
+The provider call and the GLB download both run on a worker thread; only the
+Blender import (`bpy.ops`) runs on the main thread via the operator's modal loop.
 
-**New providers should return asset URLs, not raw base64 GLB/FBX in JSON.** Fal and Meshy already fit this shape. Legacy RunPod providers may keep inline bytes until they are migrated or removed. The Blender import path must accept `Asset.url` first and `Asset.data` only as a compatibility fallback.
+## The transport rule
 
-## How the two motion cores share one path
+**Providers return asset URLs, never inline bytes.** The client downloads the
+URL and imports it. This sidesteps the response-size ceilings that forced quality
+compromises in the old self-hosted path, and it means a provider's only job is to
+map its API response to a single `Asset.url`.
 
-Core 4 (Text -> Motion) and Core 5 (Video -> Animation) are different **front ends to the same back half**. Both produce a `Motion` (SMPL-H style joint data). Both feed the existing retarget step (`containers/hymotion/retarget_fbx.py`, a 700+ entry SMPL-H -> Mixamo bone mapping) to apply the motion onto a rigged character. So Core 5 is mostly: add a monocular human-motion-recovery container (GVHMR / TRAM / WHAM lineage), output `Motion` in the same shape HY-Motion uses, and reuse the retarget path unchanged.
+## Adding a provider
 
-## Backend swap rules (so quality upgrades stay contained)
+1. Add a `StringProperty` for the API key in `preferences.py`.
+2. Subclass `Provider` in `cloud.py`, implement `generate`, set `api_key_pref_field`.
+3. Add the instance to `_PROVIDERS` in `registry.py`.
 
-- **Rig backends must output a Mixamo-compatible skeleton** (`mixamorig:Hips` hierarchy). This is why MIA was chosen over UniRig: HY-Motion's retargeting expects Mixamo bone names. When swapping MIA -> SkinTokens, verify its skeleton maps into that retarget path, or add a mapping. (See REFERENCE for the MIA/UniRig/SkinTokens detail.)
-- **Generate must return a URL to a GLB/OBJ bundle** with PBR textures. For the focused build, this means Fal Hunyuan3D first.
-- **Meshy is the first external provider spike.** Start with Generate. Rigging is allowed only after checking whether the output skeleton has `mixamorig:Hips` or an easy mapping.
+The provider dropdown, key check, and import path all pick it up automatically.
+Add a unit test in `tests/test_providers.py` that mocks the HTTP layer and asserts
+the request shape and the response-to-`Asset` mapping.
 
-## Quality bars, made concrete
+## What is deliberately not here
 
-- **Generate:** Fal Hunyuan3D + URL assets first. Meshy is the comparison/spike provider once the Fal path works.
-- **Motion (Cascadeur-grade):** a clean Mixamo FBX with no catastrophic foot-sliding is enough; the human polishes in Cascadeur/Blender. Looping (card 11) and foot-contact cleanup raise it further.
+Rigging, animation, and segmentation are separate tools, not capabilities of
+MeshMaker. There is no `Capability` enum, no RunPod transport, and no container
+build pipeline. If those tools are ever built, the old handlers live in git
+history on `dev`.

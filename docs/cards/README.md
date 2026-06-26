@@ -1,26 +1,27 @@
-# Implementation Cards
+# Implementation record
 
-Ordered plan for the simplified MeshMaker build. Keep the first useful pipeline small:
-one Generate backend, one storage transport, and only the rig/motion work needed to make
-that output usable.
+MeshMaker was narrowed to a single capability: **generate a 3D mesh from an
+image, via hosted providers.** The numbered cards that planned the journey
+(provider abstraction, URL transport, Fal, Meshy, plus the rig/motion/segment
+cards) have been retired now that the work shipped or moved out of scope. They
+remain in git history on `dev`.
 
-## Now - smallest useful pipeline
-- **01** - Provider abstraction (thin spine, no multi-generator UI)
-- **02** - Provider-agnostic URL asset transport
-- **06** - Add one hosted Generate backend: Fal Hunyuan3D v3/v3.1
-- **05** - Texture preservation through the rig roundtrip, only if rigging degrades output
-- **09** - Meshy provider spike (Generate first, Rig only after skeleton compatibility check)
+## Shipped
 
-## Backlog / not in the current slice
-- **03** - Restructure repo into the 5 cores (do when it reduces friction)
-- **04** - Raise old Trellis/Hunyuan3D 2.1 quality defaults (archived with old generators)
-- **07** - Swap Rig backend MIA -> SkinTokens
-- **08** - Expose Segment tuning knobs (P3-SAM)
-- **10** - Build the Video -> Animation core (QuickMagic style)
-- **11** - Looping + foot-contact cleanup (Cascadeur-grade)
-- **12** - Addons backlog
+- **Provider spine** - typed `GenerateRequest`, hosted `Asset` URL, registry. See `../ARCHITECTURE.md`.
+- **URL asset transport** - download the provider's hosted GLB and import it into Blender.
+- **Fal Hunyuan3D 3.1** provider (`fal-ai/hunyuan-3d/v3.1/pro/image-to-3d`).
+- **Meshy** image-to-3D provider.
 
-## Status legend
-Each card starts `Status: TODO`, unless it has been explicitly archived.
-The active quality bar is: Fal Hunyuan3D output should be production-usable enough to
-justify continuing the pipeline.
+## Next
+
+- More Generate providers as needed. Each is one `Provider` subclass in
+  `meshmaker/providers/cloud.py` plus one line in `registry.py` (and an API-key
+  preference). See the "Adding a provider" section of `../ARCHITECTURE.md`.
+- Generate-side polish: face-count / PBR tuning, retexture, mesh variations.
+
+## Out of scope
+
+Rigging, animation, and part segmentation are separate tools. The old RunPod
+containers and Blender tabs for them were removed in the Generate-only cut and
+live in git history if ever needed to seed those tools.

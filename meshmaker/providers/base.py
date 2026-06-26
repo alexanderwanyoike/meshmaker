@@ -1,112 +1,52 @@
-"""Base provider contracts.
+"""Provider contracts for MeshMaker Generate backends.
 
-The Blender UI should build typed requests and consume Asset objects. Transport
-details such as legacy base64 RunPod responses stay inside provider classes.
+MeshMaker is image-to-3D only. The Blender UI builds a typed ``GenerateRequest``
+and consumes an ``Asset``. Each hosted backend (Fal, Meshy, ...) is one
+``Provider`` subclass in ``cloud.py``. Adding a new Generate provider is a single
+class there plus one line in ``registry.py`` - nothing else changes.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any
-
-
-class Capability(Enum):
-    GENERATE = "generate"
-    SEGMENT = "segment"
-    RIG = "rig"
-    MOTION = "motion"
-    VIDEO_MOTION = "video_motion"
 
 
 @dataclass(frozen=True)
 class Asset:
-    """A generated file.
+    """A generated 3D model, returned by a provider as a hosted download URL.
 
-    `data` is a temporary compatibility path for existing base64 handlers.
-    Card 02 replaces it with URL-backed assets.
+    Providers never return inline bytes; the client downloads ``url`` and imports
+    it. ``format`` is the file extension (``glb`` today).
     """
 
-    format: str
-    metadata: dict[str, Any] = field(default_factory=dict)
-    url: str | None = None
-    data: bytes | None = None
+    url: str
+    format: str = "glb"
     name: str | None = None
-
-    def require_data(self) -> bytes:
-        if self.data is None:
-            raise ValueError("Asset has no inline data; URL download is not implemented yet")
-        return self.data
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class GenerateRequest:
+    """A provider-agnostic image-to-3D request.
+
+    ``image`` is the raw reference image bytes (PNG/JPEG). Providers encode it as a
+    base64 data URI; both Fal and Meshy accept inline data URIs, so there is no
+    separate image-upload step.
+    """
+
     api_key: str
-    endpoint_id: str
-    image: bytes | None
-    prompt: str | None
-    resolution: int
-    texture_size: int
-    seed: int | None = None
-
-
-@dataclass(frozen=True)
-class SegmentRequest:
-    api_key: str
-    endpoint_id: str
-    mesh: bytes
-
-
-@dataclass(frozen=True)
-class SegmentResult:
-    parts: list[Asset]
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class RigRequest:
-    api_key: str
-    endpoint_id: str
-    mesh: bytes
-    seed: int | None = None
-
-
-@dataclass(frozen=True)
-class MotionRequest:
-    api_key: str
-    endpoint_id: str
-    prompt: str
-    character_fbx: bytes
-    duration: float
-    fps: int
-    guidance_scale: float
-    seed: int | None = None
-
-
-@dataclass(frozen=True)
-class MotionResult:
-    animated_asset: Asset
-    metadata: dict[str, Any] = field(default_factory=dict)
+    image: bytes
+    face_count: int = 50000
+    enable_pbr: bool = False
 
 
 class Provider:
-    """Base class for capability providers."""
+    """Base class for a Generate (image-to-3D) provider."""
 
     id: str
     name: str
     description: str = ""
-    capabilities: frozenset[Capability] = frozenset()
-    endpoint_pref_field: str | None = None
-
-    def supports(self, capability: Capability) -> bool:
-        return capability in self.capabilities
+    # Name of the addon preference holding this provider's API key.
+    api_key_pref_field: str = ""
 
     def generate(self, req: GenerateRequest) -> Asset:
-        raise NotImplementedError
-
-    def segment(self, req: SegmentRequest) -> SegmentResult:
-        raise NotImplementedError
-
-    def rig(self, req: RigRequest) -> Asset:
-        raise NotImplementedError
-
-    def motion(self, req: MotionRequest) -> MotionResult:
         raise NotImplementedError
