@@ -6,21 +6,21 @@ that output usable.
 
 ## Now - smallest useful pipeline
 - **01** - Provider abstraction (thin spine, no multi-generator UI)
-- **02** - Fix the transport ceiling with R2/object-storage URLs
-- **06** - Replace Generate with one backend: Hunyuan3D 3.5
+- **02** - Provider-agnostic URL asset transport
+- **06** - Add one hosted Generate backend: Fal Hunyuan3D v3/v3.1
 - **05** - Texture preservation through the rig roundtrip, only if rigging degrades output
+- **09** - Meshy provider spike (Generate first, Rig only after skeleton compatibility check)
 
 ## Backlog / not in the current slice
 - **03** - Restructure repo into the 5 cores (do when it reduces friction)
 - **04** - Raise old Trellis/Hunyuan3D 2.1 quality defaults (archived with old generators)
 - **07** - Swap Rig backend MIA -> SkinTokens
 - **08** - Expose Segment tuning knobs (P3-SAM)
-- **09** - Plug in Meshy / Tripo as external providers
 - **10** - Build the Video -> Animation core (QuickMagic style)
 - **11** - Looping + foot-contact cleanup (Cascadeur-grade)
 - **12** - Addons backlog
 
 ## Status legend
 Each card starts `Status: TODO`, unless it has been explicitly archived.
-The active quality bar is: Hunyuan3D 3.5 output should be production-usable enough to
+The active quality bar is: Fal Hunyuan3D output should be production-usable enough to
 justify continuing the pipeline.

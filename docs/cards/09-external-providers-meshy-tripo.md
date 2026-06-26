@@ -1,28 +1,30 @@
-# Card 09 - Plug in Meshy / Tripo as external providers
+# Card 09 - Meshy provider spike
 
-Status: TODO (BACKLOG)
+Status: TODO
 Depends on: 01 (provider abstraction), 02 (URL transport)
-Quality bar: Meshy-6 meshes (this *is* the fallback to guarantee it)
+Quality bar: Meshy-6 meshes
 
 ## Goal
 
-Add Meshy and Tripo as Generate (and where available, Rig) providers that call their cloud REST APIs. This is the moment MeshMaker becomes a true router, not just a self-hosting wrapper.
+Evaluate Meshy as the first external provider for MeshMaker. Start with Generate. Try Rig only as a compatibility spike.
 
 ## Why
 
-The cheat code for the Meshy-6 quality bar: when self-hosted output can't match, route the job to the platform that can. Being model-agnostic is the differentiator - the user picks the best backend per job from one Blender UI. See ARCHITECTURE "backend swap rules" and REFERENCE section 1.
+Meshy has official APIs for Image/Text to 3D, rigging, animation, remesh, retexture, and convert. It may cover more of the pipeline than Fal Hunyuan alone, but rigging must prove skeleton compatibility before it can replace MIA.
 
 ## Scope
 
-- `meshmaker/providers/cloud.py`: `MeshyProvider`, `TripoProvider` calling their REST APIs with the user's own API key (entered in preferences).
-- Map their responses to the standard `Asset{url, metadata}`.
-- Register in the provider registry; they appear in the same Generate dropdown as the RunPod backends.
+- Add a Meshy API key preference.
+- Implement `MeshyGenerateProvider` for one Image to 3D path.
+- Map Meshy responses to `Asset{url, metadata}`.
+- Optionally implement a small `MeshyRigProvider` spike against one generated humanoid GLB.
+- Inspect the rigged output skeleton in Blender and record whether it has `mixamorig:Hips` or an easy mapping.
 
 ## Acceptance criteria
 
-- With a Meshy/Tripo key configured, the user can generate via that backend and the result imports identically to a self-hosted one.
-- Switching backend is a dropdown change, nothing else.
+- With a Meshy key configured, the user can generate a textured model and import it identically to the Fal provider.
+- Rigging spike has a clear decision: compatible with HY-Motion, mappable, or not usable for the current animation path.
 
 ## Notes
 
-This proves the abstraction against backends you don't control - the real test of the router design. Keep keys client-side in preferences (BYO-key model).
+Keep this as a spike. Do not add Tripo in the same card.

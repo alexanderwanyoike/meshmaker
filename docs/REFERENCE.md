@@ -8,15 +8,16 @@
 
 | Model | Origin | License | Quality | Notes |
 |---|---|---|---|---|
-| **Trellis 2** (legacy) | Microsoft | MIT | Very good geometry, darker textures | O-Voxel + DiT. Keep as reference only unless Hunyuan3D 3.5 access fails |
-| **Hunyuan3D 2.1** (legacy) | Tencent | Permissive commercial | Better PBR textures than Trellis | Flow-matching DiT + Paint. Keep as reference only unless Hunyuan3D 3.5 access fails |
-| **Hunyuan3D 3.5** | Tencent | TBD | Target | Only active Generate target. Access path must be confirmed before implementation |
-| **Pixal3D** | TencentARC / Tsinghua | Open | Near-reconstruction fidelity | Deferred. Do not add unless the single-generator plan fails |
+| **Trellis 2** (legacy) | Microsoft | MIT | Very good geometry, darker textures | O-Voxel + DiT. Keep as reference only unless the hosted Fal Hunyuan3D path fails |
+| **Hunyuan3D 2.1** (legacy) | Tencent | Permissive commercial | Better PBR textures than Trellis | Flow-matching DiT + Paint. Keep as reference only unless the hosted Fal Hunyuan3D path fails |
+| **Fal Hunyuan3D v3/v3.1** | Fal / Tencent partner | Commercial API | Target | First active Generate provider. Returns hosted asset URLs, no custom RunPod container |
+| **Hunyuan3D 3.5** | Tencent | TBD | Unverified | No official open-source path verified during planning |
+| **Pixal3D** | TencentARC / Tsinghua | Open | Near-reconstruction fidelity | Deferred. Do not add unless the hosted Generate plan fails |
 | **Hunyuan3D-Omni** | Tencent | Open | Controllable | "ControlNet of 3D": point cloud / voxel / bbox / pose conditioning |
 | **TripoSG** | VAST-AI | MIT | High-fidelity shape only | 1.5B rectified flow, no texture |
 | **TripoSR / Stable Fast 3D** | VAST-AI / Stability | MIT / community | Lower, very fast | <0.5-1s. Good for previews |
 
-**Current takeaway:** keep Generate scoped to Hunyuan3D 3.5 only. Do not build a Trellis/Pixal3D/Meshy/Tripo A/B harness for the focused build.
+**Current takeaway:** start Generate with Fal Hunyuan3D v3/v3.1. Do not rebuild custom RunPod generation endpoints unless hosted APIs fail the quality or cost bar.
 
 ### Commercial platforms (the bar / fallback providers)
 
@@ -27,7 +28,7 @@
 | **Rodin/Hyper3D** | $99/mo | Yes | Photorealistic 4K PBR |
 | **3DAI Studio** | $14/mo, 1000 credits | Aggregator | The "router" model, already exists |
 
-These are background market references, not active fallback providers. Do not build Meshy/Tripo routing until the single-generator pipeline works and there is a concrete reason to add a second Generate provider.
+Meshy is now the first external-provider spike after Fal Generate works. Tripo remains background reference for later.
 
 ## 2. Rig (mesh -> rigged)
 

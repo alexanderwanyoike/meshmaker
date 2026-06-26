@@ -7,7 +7,7 @@ Quality bar: Meshy-6 meshes
 ## Goal
 
 Do not spend implementation time tuning Trellis2 or Hunyuan3D 2.1 defaults while the
-project is scoped to a single new Generate backend: Hunyuan3D 3.5.
+project is scoped to a hosted Generate backend: Fal Hunyuan3D.
 
 ## Why
 
@@ -17,9 +17,9 @@ the MVP clearer.
 
 ## Scope
 
-- Leave old Trellis2/Hunyuan3D 2.1 code as reference until Hunyuan3D 3.5 is integrated.
+- Leave old Trellis2/Hunyuan3D 2.1 code as reference until the Fal Hunyuan3D path is integrated.
 - Do not add Draft / Standard / High presets for the old generators.
-- Remove or archive old generator UI once the Hunyuan3D 3.5 path is working.
+- Remove or archive old generator UI once the Fal Hunyuan3D path is working.
 
 ## Acceptance criteria
 
@@ -28,5 +28,5 @@ the MVP clearer.
 
 ## Notes
 
-Revisit only if Hunyuan3D 3.5 access fails and an old self-hosted generator must
-temporarily become the fallback.
+Revisit only if the hosted Fal Hunyuan3D path fails and an old self-hosted generator
+must temporarily become the fallback.

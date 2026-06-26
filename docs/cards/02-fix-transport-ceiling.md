@@ -1,4 +1,4 @@
-# Card 02 - Fix the transport ceiling
+# Card 02 - Provider-agnostic URL asset transport
 
 Status: TODO
 Depends on: 01 (asset-as-URL types)
@@ -6,26 +6,26 @@ Quality bar: Meshy-6 meshes (this is the prerequisite for it)
 
 ## Goal
 
-Stop returning raw base64 assets in the RunPod JSON response. Handlers write output to object storage (S3 / Cloudflare R2) and return a URL; the client downloads from it. This is the single highest-leverage change in the project.
+Make the Blender client import assets from URLs as well as legacy inline bytes. Hosted providers such as Fal and Meshy already return file URLs; RunPod handlers can be migrated later if we keep them.
 
 ## Why
 
-RunPod's synchronous response caps at ~20MB; base64 inflates bytes ~33%. To fit, every handler holds `texture_size=1024` and decimates aggressively, regardless of the model's true ceiling (`containers/trellis2/handler.py:116, 254`). The models have never been allowed to show their real quality. Fix this and existing models look dramatically better before any model swap.
+The old RunPod path returns GLB/FBX data as base64 inside JSON, which hits response-size limits and forces quality compromises. Fal/Meshy avoid this by returning hosted asset URLs. The client should consume the standard `Asset{url, metadata}` contract regardless of provider.
 
 ## Scope
 
-- Provision a bucket (R2 recommended: no egress fees). Add credentials to RunPod env + addon preferences.
-- Add a small `upload_asset(bytes, key) -> url` helper used by every handler; return `{ "asset_url": ..., "metadata": ... }` instead of `{ "glb": "<base64>" }`.
-- Update `meshmaker/api.py` to download from `asset_url` to a temp file before import.
-- Use presigned URLs (time-limited) so the bucket isn't public.
-- Apply across all output-producing handlers: trellis2, hunyuan3d, hunyuan3d-part, mia, hymotion.
+- Add a stdlib-only download helper in `meshmaker/api.py` that downloads an asset URL to a temp file.
+- Update operator import paths to use `Asset.url` when present and `Asset.data` only for legacy providers.
+- Keep legacy RunPod base64 support isolated in `meshmaker/providers/runpod.py`.
+- Do not provision R2 unless we choose to keep custom RunPod handlers that need it.
+- Add tests for URL asset download and provider URL mapping.
 
 ## Acceptance criteria
 
-- A Trellis2 generation at `texture_size=4096` round-trips successfully (would have blown the 20MB limit before).
-- No handler returns base64 mesh/fbx payloads.
-- Client import path works from a presigned URL.
+- Client import path works from a hosted/presigned URL.
+- Existing legacy RunPod providers still work through inline bytes.
+- Card 06 can implement Fal Hunyuan3D without touching Blender import logic.
 
 ## Notes
 
-This unblocks card 04 (raise defaults). Order: 02 then 04.
+This unblocks hosted Generate providers first. R2 remains an option only for custom RunPod handlers.

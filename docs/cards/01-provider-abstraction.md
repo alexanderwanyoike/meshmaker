@@ -19,7 +19,7 @@ Code is currently organized by model, with bespoke operators per handler. That i
   - `runpod.py` - one provider per existing container (Trellis2, Hunyuan3D, P3-SAM, MIA, HY-Motion) wrapping the current `api.call_runpod` flow.
   - `registry.py` - discovery: list providers, query "who supports capability X", resolve the user's chosen provider.
 - Refactor the four Blender operators (mesh, rig, anim, segment) to call `registry.resolve(cap, choice).<capability>(req)` instead of hand-rolling payloads.
-- Do not add new provider dropdowns in the simplified build. Keep the existing Generate model selector for legacy Trellis/Hunyuan3D 2.1 until card 06 replaces it with Hunyuan3D 3.5 only.
+- Do not add new provider dropdowns in the simplified build. Keep the existing Generate model selector for legacy Trellis/Hunyuan3D 2.1 until card 06 replaces it with the Fal Hunyuan3D path.
 
 ## Acceptance criteria
 
