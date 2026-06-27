@@ -26,9 +26,12 @@ Thumbs.db
 # Output files
 *.fbx
 *.npz
-*.npy
 output/
 
 # Claude
 .claude/
-.notes/
+
+# Blender
+*.blend1
+meshmaker.zip
+test_output/
