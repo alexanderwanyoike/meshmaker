@@ -57,14 +57,42 @@ class TestProviderRegistry(unittest.TestCase):
             registry.resolve("NOPE")
 
 
+class TestProviderParams(unittest.TestCase):
+    def test_fal_controls(self):
+        params = cloud.FalHunyuan3DProvider().params
+        keys = [s.key for s in params]
+        self.assertIn("tier", keys)
+        self.assertIn("generate_type", keys)
+        # Fal cannot honestly go below its 40k API floor.
+        face_count = next(s for s in params if s.key == "face_count")
+        self.assertEqual(face_count.min, 40000)
+
+    def test_meshy_controls(self):
+        params = cloud.MeshyProvider().params
+        keys = [s.key for s in params]
+        for key in ("should_remesh", "target_polycount", "topology", "should_texture", "enable_pbr"):
+            self.assertIn(key, keys)
+        # Remesh defaults on (so polycount applies); polycount floor is 25k.
+        remesh = next(s for s in params if s.key == "should_remesh")
+        self.assertTrue(remesh.default)
+        polycount = next(s for s in params if s.key == "target_polycount")
+        self.assertEqual(polycount.min, 25000)
+        # symmetry_mode is deprecated/no-op on Meshy: no dead control.
+        self.assertNotIn("symmetry_mode", keys)
+
+
 class TestFalProvider(unittest.TestCase):
     def setUp(self):
         self.provider = cloud.FalHunyuan3DProvider()
         self.req = base.GenerateRequest(
             api_key="fal-key",
             image=b"image-bytes",
-            face_count=60000,
-            enable_pbr=True,
+            params={
+                "tier": "pro",
+                "face_count": 60000,
+                "generate_type": "Normal",
+                "enable_pbr": True,
+            },
         )
 
     def test_generate_maps_request_and_response(self):
@@ -88,8 +116,21 @@ class TestFalProvider(unittest.TestCase):
         self.assertEqual(url, "https://queue.fal.run/fal-ai/hunyuan-3d/v3.1/pro/image-to-3d")
         self.assertTrue(payload["input_image_url"].startswith("data:image/png;base64,"))
         self.assertEqual(payload["face_count"], 60000)
+        self.assertEqual(payload["generate_type"], "Normal")
         self.assertTrue(payload["enable_pbr"])
         self.assertEqual(headers["Authorization"], "Key fal-key")
+
+    def test_rapid_tier_changes_model_id(self):
+        self.req.params["tier"] = "rapid"
+        submit = {"status_url": "s", "response_url": "r"}
+        result = {"model_glb": {"url": "https://fal.media/model.glb"}}
+        with patch.object(cloud.api, "http_post_json", return_value=submit) as mock_post, \
+                patch.object(cloud.api, "http_get_json", side_effect=[{"status": "COMPLETED"}, result]):
+            self.provider.generate(self.req)
+        self.assertEqual(
+            mock_post.call_args.args[0],
+            "https://queue.fal.run/fal-ai/hunyuan-3d/v3.1/rapid/image-to-3d",
+        )
 
     def test_generate_falls_back_to_model_urls(self):
         submit = {"status_url": "s", "response_url": "r"}
@@ -153,8 +194,14 @@ class TestMeshyProvider(unittest.TestCase):
         self.req = base.GenerateRequest(
             api_key="meshy-key",
             image=b"image-bytes",
-            face_count=30000,
-            enable_pbr=False,
+            params={
+                "ai_model": "meshy-6",
+                "should_remesh": True,
+                "target_polycount": 30000,
+                "topology": "quad",
+                "should_texture": True,
+                "enable_pbr": False,
+            },
         )
 
     def test_generate_maps_request_and_response(self):
@@ -176,7 +223,10 @@ class TestMeshyProvider(unittest.TestCase):
         url, payload, headers = mock_post.call_args.args[:3]
         self.assertEqual(url, "https://api.meshy.ai/openapi/v1/image-to-3d")
         self.assertTrue(payload["image_url"].startswith("data:image/png;base64,"))
+        self.assertEqual(payload["ai_model"], "meshy-6")
+        self.assertTrue(payload["should_remesh"])
         self.assertEqual(payload["target_polycount"], 30000)
+        self.assertEqual(payload["topology"], "quad")
         self.assertTrue(payload["should_texture"])
         self.assertEqual(payload["target_formats"], ["glb"])
         self.assertEqual(headers["Authorization"], "Bearer meshy-key")
@@ -186,6 +236,16 @@ class TestMeshyProvider(unittest.TestCase):
             mock_get.call_args.args[0],
             "https://api.meshy.ai/openapi/v1/image-to-3d/task-123",
         )
+
+    def test_should_remesh_defaults_on(self):
+        # Without remesh, Meshy ignores target_polycount; the default must be True.
+        req = base.GenerateRequest(api_key="k", image=b"img", params={})
+        created = {"result": "t1"}
+        task = {"status": "SUCCEEDED", "model_urls": {"glb": "https://m/x.glb"}}
+        with patch.object(cloud.api, "http_post_json", return_value=created) as mock_post, \
+                patch.object(cloud.api, "http_get_json", return_value=task):
+            self.provider.generate(req)
+        self.assertTrue(mock_post.call_args.args[1]["should_remesh"])
 
     def test_polls_until_succeeded(self):
         created = {"result": "t1"}

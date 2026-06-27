@@ -6,6 +6,8 @@ import bpy
 from bpy.types import Panel
 
 from .. import ADDON_ID
+from . import params
+from ..providers import registry
 from .operators import MESH_MODELS, PREVIEW_NAME
 
 # Preview datablock for the "Use File" workflow (separate from the Gemini one).
@@ -72,6 +74,7 @@ class MESHMAKER_PT_main(Panel):
 
         model_key = wm.meshmaker_model_backend
         model = MESH_MODELS[model_key]
+        provider = registry.resolve(model_key)
 
         missing_provider = not getattr(prefs, model["api_key_field"], "")
         missing_gemini = not prefs.gemini_api_key
@@ -100,9 +103,9 @@ class MESHMAKER_PT_main(Panel):
         busy = wm.meshmaker_status.startswith("Generating")
 
         if wm.meshmaker_workflow == 'GENERATE':
-            self._draw_generate_workflow(layout, wm, busy)
+            self._draw_generate_workflow(layout, wm, busy, provider)
         else:
-            self._draw_file_workflow(layout, wm, busy)
+            self._draw_file_workflow(layout, wm, busy, provider)
 
         # Status (shared)
         layout.separator()
@@ -118,12 +121,11 @@ class MESHMAKER_PT_main(Panel):
         else:
             layout.label(text=status, icon='INFO')
 
-    def _draw_settings(self, layout, wm):
-        layout.label(text="3D Settings:")
-        layout.prop(wm, "meshmaker_face_count", text="Face Count")
-        layout.prop(wm, "meshmaker_enable_pbr", text="PBR Materials")
+    def _draw_settings(self, layout, wm, provider):
+        layout.label(text=f"{provider.name} settings:")
+        params.draw(layout, wm, provider)
 
-    def _draw_generate_workflow(self, layout, wm, busy):
+    def _draw_generate_workflow(self, layout, wm, busy, provider):
         preview = bpy.data.images.get(PREVIEW_NAME)
         has_preview = preview is not None
 
@@ -151,10 +153,10 @@ class MESHMAKER_PT_main(Panel):
 
             layout.operator("meshmaker.clear_preview", text="Clear", icon='X')
 
-            # 3D settings + generate
+            # Provider settings + generate
             layout.separator()
             col = layout.column(align=True)
-            self._draw_settings(col, wm)
+            self._draw_settings(col, wm, provider)
 
             layout.separator()
             row = layout.row(align=True)
@@ -167,10 +169,8 @@ class MESHMAKER_PT_main(Panel):
                 icon='MESH_MONKEY',
             )
             op.image_path = ""  # Will fall back to preview
-            op.face_count = wm.meshmaker_face_count
-            op.enable_pbr = wm.meshmaker_enable_pbr
 
-    def _draw_file_workflow(self, layout, wm, busy):
+    def _draw_file_workflow(self, layout, wm, busy, provider):
         col = layout.column(align=True)
         col.label(text="Reference Image:")
         col.prop(wm, "meshmaker_image_path", text="")
@@ -186,7 +186,7 @@ class MESHMAKER_PT_main(Panel):
 
         col = layout.column(align=True)
         col.separator()
-        self._draw_settings(col, wm)
+        self._draw_settings(col, wm, provider)
 
         layout.separator()
         row = layout.row(align=True)
@@ -199,8 +199,6 @@ class MESHMAKER_PT_main(Panel):
             icon='MESH_MONKEY',
         )
         op.image_path = wm.meshmaker_image_path
-        op.face_count = wm.meshmaker_face_count
-        op.enable_pbr = wm.meshmaker_enable_pbr
 
 
 def register():
@@ -221,26 +219,12 @@ def register():
         subtype='FILE_PATH',
         update=_on_image_path_update,
     )
-    wm.meshmaker_face_count = bpy.props.IntProperty(
-        name="Face Count",
-        description="Target polygon count for the generated mesh",
-        default=50000,
-        min=40000,
-        max=500000,
-    )
-    wm.meshmaker_enable_pbr = bpy.props.BoolProperty(
-        name="PBR Materials",
-        description="Request PBR material maps (may cost extra)",
-        default=False,
-    )
 
 
 def unregister():
     _clear_file_preview()
 
     wm = bpy.types.WindowManager
-    del wm.meshmaker_enable_pbr
-    del wm.meshmaker_face_count
     del wm.meshmaker_image_path
     del wm.meshmaker_workflow
 
