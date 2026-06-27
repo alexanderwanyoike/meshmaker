@@ -1,10 +1,56 @@
 """Blender UI panels for MeshMaker mesh generation."""
 
+import os
+
 import bpy
 from bpy.types import Panel
 
 from .. import ADDON_ID
 from .operators import MESH_MODELS, PREVIEW_NAME
+
+# Preview datablock for the "Use File" workflow (separate from the Gemini one).
+FILE_PREVIEW_NAME = "MeshMaker File Preview"
+
+
+def _build_preview(img):
+    """Populate an image's preview thumbnail (mirrors the Gemini image path)."""
+    img.preview_ensure()
+    w, h = img.size
+    if not (w and h):
+        return
+    px = img.pixels[:]
+    p = img.preview
+    p.icon_size = (w, h)
+    p.icon_pixels_float = px
+    p.image_size = (w, h)
+    p.image_pixels_float = px
+
+
+def _clear_file_preview():
+    old = bpy.data.images.get(FILE_PREVIEW_NAME)
+    if old is not None:
+        bpy.data.images.remove(old)
+
+
+def _load_file_preview(path):
+    """Load the selected reference image into a preview datablock, or clear it."""
+    _clear_file_preview()
+    if not path:
+        return
+    abspath = bpy.path.abspath(path)
+    if not os.path.isfile(abspath):
+        return
+    try:
+        img = bpy.data.images.load(abspath, check_existing=False)
+        img.name = FILE_PREVIEW_NAME
+        _build_preview(img)
+    except Exception:
+        # Unsupported/corrupt image: leave no preview rather than erroring.
+        _clear_file_preview()
+
+
+def _on_image_path_update(self, context):
+    _load_file_preview(self.meshmaker_image_path)
 
 
 class MESHMAKER_PT_main(Panel):
@@ -129,6 +175,16 @@ class MESHMAKER_PT_main(Panel):
         col.label(text="Reference Image:")
         col.prop(wm, "meshmaker_image_path", text="")
 
+        # Preview of the selected file (same display as the Gemini workflow).
+        preview = bpy.data.images.get(FILE_PREVIEW_NAME)
+        if preview is not None:
+            layout.separator()
+            if preview.preview and preview.preview.icon_id:
+                layout.template_icon(icon_value=preview.preview.icon_id, scale=10.0)
+            else:
+                layout.label(text="(preview loading...)")
+
+        col = layout.column(align=True)
         col.separator()
         self._draw_settings(col, wm)
 
@@ -163,6 +219,7 @@ def register():
         name="Image Path",
         description="Path to the reference image",
         subtype='FILE_PATH',
+        update=_on_image_path_update,
     )
     wm.meshmaker_face_count = bpy.props.IntProperty(
         name="Face Count",
@@ -179,6 +236,8 @@ def register():
 
 
 def unregister():
+    _clear_file_preview()
+
     wm = bpy.types.WindowManager
     del wm.meshmaker_enable_pbr
     del wm.meshmaker_face_count
