@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test deps
+        run: pip install pytest
+      - name: Test
+        run: python -m pytest -q
+      - name: Build addon zip
+        run: make meshmaker
+      - name: Stage a version-stamped copy
+        run: cp meshmaker.zip "meshmaker-${{ github.ref_name }}.zip"
+      - name: Publish release with the addon zip
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            meshmaker.zip
+            meshmaker-${{ github.ref_name }}.zip
