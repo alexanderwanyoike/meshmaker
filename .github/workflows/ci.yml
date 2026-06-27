@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test deps
+        run: pip install pytest
+      - name: Compile
+        run: python -m compileall meshmaker tests
+      - name: Test
+        run: python -m pytest -q
+      - name: Build addon zip
+        run: make meshmaker
+      - name: Upload addon zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: meshmaker-addon
+          path: meshmaker.zip
