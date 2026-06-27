@@ -15,7 +15,10 @@ from .. import api
 from .base import Asset, GenerateRequest, Provider
 
 _POLL_INTERVAL = 5
-_POLL_TIMEOUT = 600
+# Generous: heavy models (e.g. Fal pro) can spend many minutes in cold-start and
+# queue before compute begins. Timing out too early would discard a job the
+# provider is still running - and that the user has already paid for.
+_POLL_TIMEOUT = 1800
 
 
 class ProviderError(Exception):
@@ -60,9 +63,11 @@ class FalHunyuan3DProvider(Provider):
 
         result = self._poll(status_url, response_url, headers)
 
-        url = (result.get("model_glb") or {}).get("url")
+        # Prefer the dedicated GLB url. model_glb is polymorphic - on some tiers
+        # (e.g. rapid) it points at an OBJ - whereas model_urls.glb is always GLB.
+        url = ((result.get("model_urls") or {}).get("glb") or {}).get("url")
         if not url:
-            url = ((result.get("model_urls") or {}).get("glb") or {}).get("url")
+            url = (result.get("model_glb") or {}).get("url")
         if not url:
             raise ProviderError(f"Fal response had no GLB URL: {result}")
 

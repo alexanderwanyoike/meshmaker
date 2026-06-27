@@ -1,7 +1,7 @@
 bl_info = {
     "name": "MeshMaker",
     "author": "MeshMaker",
-    "version": (0, 3, 0),
+    "version": (0, 3, 1),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar",
     "description": "Generate 3D meshes from images via hosted AI providers (Fal, Meshy)",

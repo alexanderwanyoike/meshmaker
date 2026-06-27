@@ -102,6 +102,21 @@ class TestFalProvider(unittest.TestCase):
 
         self.assertEqual(asset.url, "https://fal.media/alt.glb")
 
+    def test_prefers_model_urls_glb_over_polymorphic_model_glb(self):
+        # model_glb can point at an OBJ on some tiers; model_urls.glb must win.
+        submit = {"status_url": "s", "response_url": "r"}
+        status = {"status": "COMPLETED"}
+        result = {
+            "model_glb": {"url": "https://fal.media/model.obj"},
+            "model_urls": {"glb": {"url": "https://fal.media/model.glb"}},
+        }
+
+        with patch.object(cloud.api, "http_post_json", return_value=submit), \
+                patch.object(cloud.api, "http_get_json", side_effect=[status, result]):
+            asset = self.provider.generate(self.req)
+
+        self.assertEqual(asset.url, "https://fal.media/model.glb")
+
     def test_polls_until_completed(self):
         submit = {"status_url": "s", "response_url": "r"}
         result = {"model_glb": {"url": "https://fal.media/model.glb"}}
