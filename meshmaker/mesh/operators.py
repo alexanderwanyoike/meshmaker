@@ -6,10 +6,11 @@ import tempfile
 import threading
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
+from bpy.props import EnumProperty, StringProperty
 from bpy.types import Operator
 
 from .. import ADDON_ID, api
+from . import params
 from ..providers import registry
 from ..providers.base import GenerateRequest
 
@@ -197,20 +198,6 @@ class MESHMAKER_OT_generate_mesh(Operator):
         subtype='FILE_PATH',
     )
 
-    face_count: IntProperty(
-        name="Face Count",
-        description="Target polygon count for the generated mesh",
-        default=50000,
-        min=40000,
-        max=500000,
-    )
-
-    enable_pbr: BoolProperty(
-        name="PBR Materials",
-        description="Request PBR material maps (may cost extra)",
-        default=False,
-    )
-
     # Internal state (not shown in UI)
     _thread = None
     _result = None
@@ -247,8 +234,7 @@ class MESHMAKER_OT_generate_mesh(Operator):
         request = GenerateRequest(
             api_key=api_key,
             image=image_bytes,
-            face_count=self.face_count,
-            enable_pbr=self.enable_pbr,
+            params=params.collect(wm, provider),
         )
 
         # Reset state
