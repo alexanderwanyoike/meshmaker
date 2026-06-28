@@ -12,7 +12,7 @@ import base64
 import time
 
 from .. import api
-from .base import Asset, GenerateRequest, Provider
+from .base import Asset, GenerateRequest, ParamSpec, Provider
 
 _POLL_INTERVAL = 5
 # Generous: heavy models (e.g. Fal pro) can spend many minutes in cold-start and
@@ -35,26 +35,47 @@ def _data_uri(image: bytes, mime: str = "image/png") -> str:
 
 
 class FalHunyuan3DProvider(Provider):
-    """Tencent Hunyuan3D 3.1 Pro image-to-3D, hosted on Fal's queue API."""
+    """Tencent Hunyuan3D 3.1 image-to-3D, hosted on Fal's queue API."""
 
     id = "FAL_HUNYUAN3D"
     name = "Hunyuan3D 3.1 (Fal)"
-    description = "Tencent Hunyuan3D 3.1 Pro image-to-3D, hosted on Fal"
+    description = "Tencent Hunyuan3D 3.1 image-to-3D, hosted on Fal"
     api_key_pref_field = "fal_api_key"
 
-    # Swap to "fal-ai/hunyuan-3d/v3.1/rapid/image-to-3d" for the cheaper/faster tier.
-    model_id = "fal-ai/hunyuan-3d/v3.1/pro/image-to-3d"
+    params = (
+        ParamSpec(
+            "tier", "Tier", "enum", "pro",
+            items=(("pro", "Pro (quality)"), ("rapid", "Rapid (fast/cheap)")),
+            description="Pro is higher quality and slower; Rapid is faster and cheaper",
+        ),
+        # Fal's API hard-floors face_count at 40,000 - it cannot honestly go lower.
+        ParamSpec(
+            "face_count", "Face Count", "int", 50000, min=40000, max=1500000,
+            description="Target polygon count (Fal minimum is 40,000)",
+        ),
+        ParamSpec(
+            "generate_type", "Type", "enum", "Normal",
+            items=(("Normal", "Normal"), ("Geometry", "Geometry (no texture)")),
+            description="Geometry returns an untextured white model",
+        ),
+        ParamSpec("enable_pbr", "PBR Materials", "bool", False),
+    )
 
     def generate(self, req: GenerateRequest) -> Asset:
+        p = req.params
+        tier = p.get("tier", "pro")
+        model_id = f"fal-ai/hunyuan-3d/v3.1/{tier}/image-to-3d"
+
         headers = {"Authorization": f"Key {req.api_key}"}
         payload = {
             "input_image_url": _data_uri(req.image),
-            "face_count": req.face_count,
-            "enable_pbr": req.enable_pbr,
+            "face_count": p.get("face_count", 50000),
+            "generate_type": p.get("generate_type", "Normal"),
+            "enable_pbr": p.get("enable_pbr", False),
         }
 
         submit = api.http_post_json(
-            f"https://queue.fal.run/{self.model_id}", payload, headers,
+            f"https://queue.fal.run/{model_id}", payload, headers,
         )
         status_url = submit.get("status_url")
         response_url = submit.get("response_url")
@@ -103,17 +124,45 @@ class MeshyProvider(Provider):
     api_key_pref_field = "meshy_api_key"
 
     base_url = "https://api.meshy.ai"
-    # "latest" tracks Meshy's newest model (meshy-6); pin to "meshy-5" for stability.
-    ai_model = "latest"
+
+    params = (
+        ParamSpec(
+            "ai_model", "Model", "enum", "latest",
+            items=(("meshy-5", "Meshy 5"), ("meshy-6", "Meshy 6"), ("latest", "Latest")),
+        ),
+        # Without remesh, Meshy ignores target_polycount and returns the native
+        # (very high poly) mesh. On by default so Face Count actually applies.
+        ParamSpec(
+            "should_remesh", "Remesh", "bool", True,
+            description="Remesh to the target polycount (off returns the raw, very dense mesh)",
+        ),
+        ParamSpec(
+            "target_polycount", "Target Polycount", "int", 50000, min=25000, max=300000,
+            description="Only applies when Remesh is on",
+        ),
+        ParamSpec(
+            "topology", "Topology", "enum", "triangle",
+            items=(("triangle", "Triangle"), ("quad", "Quad")),
+            description="Only applies when Remesh is on",
+        ),
+        ParamSpec("should_texture", "Texture", "bool", True),
+        ParamSpec(
+            "enable_pbr", "PBR Materials", "bool", False,
+            description="Only applies when Texture is on",
+        ),
+    )
 
     def generate(self, req: GenerateRequest) -> Asset:
+        p = req.params
         headers = {"Authorization": f"Bearer {req.api_key}"}
         payload = {
             "image_url": _data_uri(req.image),
-            "ai_model": self.ai_model,
-            "should_texture": True,
-            "enable_pbr": req.enable_pbr,
-            "target_polycount": req.face_count,
+            "ai_model": p.get("ai_model", "latest"),
+            "should_remesh": p.get("should_remesh", True),
+            "target_polycount": p.get("target_polycount", 50000),
+            "topology": p.get("topology", "triangle"),
+            "should_texture": p.get("should_texture", True),
+            "enable_pbr": p.get("enable_pbr", False),
             "target_formats": ["glb"],
         }
 
