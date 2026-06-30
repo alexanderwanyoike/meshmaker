@@ -11,7 +11,7 @@ class MeshMakerPreferences(AddonPreferences):
     # --- Generate providers (bring your own key) ---
     fal_api_key: StringProperty(
         name="Fal API Key",
-        description="API key for Fal (Hunyuan3D 3.1)",
+        description="API key for Fal (Hunyuan3D, Pixal3D, Tripo, Rodin)",
         subtype='PASSWORD',
     )
 

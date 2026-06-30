@@ -44,7 +44,10 @@ registry = importlib.import_module("meshmaker.providers.registry")
 class TestProviderRegistry(unittest.TestCase):
     def test_lists_generate_providers(self):
         ids = [provider.id for provider in registry.list_providers()]
-        self.assertEqual(ids, ["FAL_HUNYUAN3D", "MESHY"])
+        self.assertEqual(
+            ids,
+            ["FAL_HUNYUAN3D", "FAL_PIXAL3D", "FAL_TRIPO", "FAL_RODIN", "MESHY"],
+        )
 
     def test_resolve_default_is_first(self):
         self.assertEqual(registry.resolve().id, "FAL_HUNYUAN3D")
@@ -79,6 +82,35 @@ class TestProviderParams(unittest.TestCase):
         self.assertEqual(polycount.min, 25000)
         # symmetry_mode is deprecated/no-op on Meshy: no dead control.
         self.assertNotIn("symmetry_mode", keys)
+
+    def test_pixal3d_controls(self):
+        params = cloud.FalPixal3DProvider().params
+        keys = [s.key for s in params]
+        for key in ("resolution", "texture_size", "remesh", "decimation_target"):
+            self.assertIn(key, keys)
+        resolution = next(s for s in params if s.key == "resolution")
+        self.assertEqual([v for v, _ in resolution.items], ["1024", "1536"])
+
+    def test_tripo_controls(self):
+        params = cloud.FalTripoProvider().params
+        keys = [s.key for s in params]
+        for key in ("texture", "pbr", "quad", "face_limit"):
+            self.assertIn(key, keys)
+
+    def test_rodin_controls(self):
+        params = cloud.FalRodinProvider().params
+        keys = [s.key for s in params]
+        for key in ("quality", "material", "tier", "hyper_mode"):
+            self.assertIn(key, keys)
+
+    def test_all_fal_providers_share_one_key(self):
+        for cls in (
+            cloud.FalHunyuan3DProvider,
+            cloud.FalPixal3DProvider,
+            cloud.FalTripoProvider,
+            cloud.FalRodinProvider,
+        ):
+            self.assertEqual(cls().api_key_pref_field, "fal_api_key")
 
 
 class TestFalProvider(unittest.TestCase):
@@ -186,6 +218,116 @@ class TestFalProvider(unittest.TestCase):
                 patch.object(cloud.api, "http_get_json", side_effect=[{"status": "COMPLETED"}, {}]):
             with self.assertRaises(cloud.ProviderError):
                 self.provider.generate(self.req)
+
+
+class TestPixal3DProvider(unittest.TestCase):
+    def setUp(self):
+        self.provider = cloud.FalPixal3DProvider()
+        self.req = base.GenerateRequest(
+            api_key="fal-key",
+            image=b"image-bytes",
+            params={
+                "resolution": "1536",
+                "texture_size": "4096",
+                "remesh": True,
+                "decimation_target": 100000,
+            },
+        )
+
+    def test_generate_maps_request_and_response(self):
+        submit = {"status_url": "s", "response_url": "r"}
+        status = {"status": "COMPLETED"}
+        result = {"model_glb": {"url": "https://fal.media/pixal.glb"}, "seed": 7}
+
+        with patch.object(cloud.api, "http_post_json", return_value=submit) as mock_post, \
+                patch.object(cloud.api, "http_get_json", side_effect=[status, result]):
+            asset = self.provider.generate(self.req)
+
+        self.assertEqual(asset.url, "https://fal.media/pixal.glb")
+        self.assertEqual(asset.metadata["provider"], "FAL_PIXAL3D")
+
+        url, payload, headers = mock_post.call_args.args[:3]
+        self.assertEqual(url, "https://queue.fal.run/fal-ai/pixal3d")
+        self.assertTrue(payload["image_url"].startswith("data:image/png;base64,"))
+        # Enum values arrive as strings; the payload must send real ints.
+        self.assertEqual(payload["resolution"], 1536)
+        self.assertEqual(payload["texture_size"], 4096)
+        self.assertEqual(payload["decimation_target"], 100000)
+        self.assertEqual(headers["Authorization"], "Key fal-key")
+
+
+class TestTripoProvider(unittest.TestCase):
+    def setUp(self):
+        self.provider = cloud.FalTripoProvider()
+        self.req = base.GenerateRequest(
+            api_key="fal-key",
+            image=b"image-bytes",
+            params={
+                "texture": "HD",
+                "pbr": True,
+                "quad": True,
+                "face_limit": 40000,
+            },
+        )
+
+    def test_generate_maps_request_and_response(self):
+        submit = {"status_url": "s", "response_url": "r"}
+        status = {"status": "COMPLETED"}
+        # Tripo nests the GLB under model_mesh.url.
+        result = {"model_mesh": {"url": "https://fal.media/tripo.glb"}}
+
+        with patch.object(cloud.api, "http_post_json", return_value=submit) as mock_post, \
+                patch.object(cloud.api, "http_get_json", side_effect=[status, result]):
+            asset = self.provider.generate(self.req)
+
+        self.assertEqual(asset.url, "https://fal.media/tripo.glb")
+        self.assertEqual(asset.metadata["provider"], "FAL_TRIPO")
+
+        url, payload, headers = mock_post.call_args.args[:3]
+        self.assertEqual(url, "https://queue.fal.run/tripo3d/tripo/v2.5/image-to-3d")
+        self.assertTrue(payload["image_url"].startswith("data:image/png;base64,"))
+        self.assertEqual(payload["texture"], "HD")
+        self.assertTrue(payload["pbr"])
+        self.assertTrue(payload["quad"])
+        self.assertEqual(payload["face_limit"], 40000)
+        self.assertEqual(headers["Authorization"], "Key fal-key")
+
+
+class TestRodinProvider(unittest.TestCase):
+    def setUp(self):
+        self.provider = cloud.FalRodinProvider()
+        self.req = base.GenerateRequest(
+            api_key="fal-key",
+            image=b"image-bytes",
+            params={
+                "quality": "high",
+                "material": "PBR",
+                "tier": "Regular",
+                "hyper_mode": True,
+            },
+        )
+
+    def test_generate_maps_request_and_response(self):
+        submit = {"status_url": "s", "response_url": "r"}
+        status = {"status": "COMPLETED"}
+        result = {"model_mesh": {"url": "https://fal.media/rodin.glb"}}
+
+        with patch.object(cloud.api, "http_post_json", return_value=submit) as mock_post, \
+                patch.object(cloud.api, "http_get_json", side_effect=[status, result]):
+            asset = self.provider.generate(self.req)
+
+        self.assertEqual(asset.url, "https://fal.media/rodin.glb")
+        self.assertEqual(asset.metadata["provider"], "FAL_RODIN")
+
+        url, payload, headers = mock_post.call_args.args[:3]
+        self.assertEqual(url, "https://queue.fal.run/fal-ai/hyper3d/rodin")
+        # Rodin takes an array of image urls.
+        self.assertEqual(len(payload["input_image_urls"]), 1)
+        self.assertTrue(payload["input_image_urls"][0].startswith("data:image/png;base64,"))
+        self.assertEqual(payload["geometry_file_format"], "glb")
+        self.assertEqual(payload["quality"], "high")
+        self.assertTrue(payload["hyper_mode"])
+        self.assertEqual(headers["Authorization"], "Key fal-key")
 
 
 class TestMeshyProvider(unittest.TestCase):

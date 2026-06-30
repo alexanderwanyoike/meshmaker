@@ -6,13 +6,25 @@ this list, so nothing else needs to change.
 """
 
 from .base import Provider
-from .cloud import FalHunyuan3DProvider, MeshyProvider
+from .cloud import (
+    FalHunyuan3DProvider,
+    FalPixal3DProvider,
+    FalRodinProvider,
+    FalTripoProvider,
+    MeshyProvider,
+)
 
 FAL_HUNYUAN3D = FalHunyuan3DProvider()
+FAL_PIXAL3D = FalPixal3DProvider()
+FAL_TRIPO = FalTripoProvider()
+FAL_RODIN = FalRodinProvider()
 MESHY = MeshyProvider()
 
 _PROVIDERS: tuple[Provider, ...] = (
     FAL_HUNYUAN3D,
+    FAL_PIXAL3D,
+    FAL_TRIPO,
+    FAL_RODIN,
     MESHY,
 )
 
