@@ -52,7 +52,9 @@ meshmaker/                     # Blender addon (the client)
     panels.py                  #   the sidebar UI
   providers/                   # the provider spine
     base.py                    #   Provider, GenerateRequest, Asset
-    cloud.py                   #   FalHunyuan3DProvider, MeshyProvider
+    common.py                  #   ProviderError, data_uri, poll policy
+    fal/                       #   queue transport + Hunyuan3D/Pixal3D/Tripo/Rodin
+    meshy.py                   #   MeshyProvider
     registry.py                #   the active provider list
 docs/                          # vision, architecture, reference, cards
 tests/                         # provider mapping + HTTP helper tests
@@ -83,13 +85,17 @@ map its API response to a single `Asset.url`.
 
 ## Adding a provider
 
-1. Add a `StringProperty` for the API key in `preferences.py`.
-2. Subclass `Provider` in `cloud.py`, implement `generate`, set `api_key_pref_field`.
+1. Add a `StringProperty` for the API key in `preferences.py` (Fal models reuse
+   the existing `fal_api_key`).
+2. Subclass `Provider` in its own module - a Fal model is a `FalQueueProvider`
+   subclass in `providers/fal/`; anything else gets its own module. Implement
+   `generate` (or just `_payload` for a Fal model) and set `api_key_pref_field`.
 3. Add the instance to `_PROVIDERS` in `registry.py`.
 
 The provider dropdown, key check, and import path all pick it up automatically.
-Add a unit test in `tests/test_providers.py` that mocks the HTTP layer and asserts
-the request shape and the response-to-`Asset` mapping.
+Add a unit test (`tests/test_fal.py` for a Fal model, else a new `tests/test_*.py`)
+that mocks the HTTP layer and asserts the request shape and the
+response-to-`Asset` mapping.
 
 ## What is deliberately not here
 

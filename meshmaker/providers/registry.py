@@ -1,18 +1,19 @@
 """Registry of MeshMaker Generate providers.
 
-To add a provider: implement a ``Provider`` subclass in ``cloud.py`` and add its
+To add a provider: implement a ``Provider`` subclass (a Fal model goes in the
+``fal/`` subpackage; a standalone provider gets its own module) and add its
 instance to ``_PROVIDERS`` below. The Blender UI builds its model dropdown from
 this list, so nothing else needs to change.
 """
 
 from .base import Provider
-from .cloud import (
+from .fal import (
     FalHunyuan3DProvider,
     FalPixal3DProvider,
     FalRodinProvider,
     FalTripoProvider,
-    MeshyProvider,
 )
+from .meshy import MeshyProvider
 
 FAL_HUNYUAN3D = FalHunyuan3DProvider()
 FAL_PIXAL3D = FalPixal3DProvider()

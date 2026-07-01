@@ -14,7 +14,7 @@
 
 All accept the reference image as a base64 data URI (`data:image/png;base64,...`),
 so no separate image upload is required. The four Fal models share one Fal API key
-and one queue transport (`_FalQueueProvider`); only the endpoint, payload, and the
+and one queue transport (`FalQueueProvider` in `providers/fal/queue.py`); only the endpoint, payload, and the
 result's GLB field differ (`_fal_glb_url` handles all three output shapes).
 
 ### Fal (queue API)

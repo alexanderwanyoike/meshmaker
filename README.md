@@ -25,8 +25,8 @@ are handled by separate, focused tools.
 
 All return a hosted GLB URL, which the addon downloads and imports. The four
 Fal-hosted models share one **Fal API key**. Adding another Fal model is a tiny
-`_FalQueueProvider` subclass in `meshmaker/providers/cloud.py` plus one line in
-`registry.py`; the queue submit/poll transport is shared.
+`FalQueueProvider` subclass in its own module under `meshmaker/providers/fal/`
+plus one line in `registry.py`; the queue submit/poll transport is shared.
 
 ## Repo structure
 
@@ -38,7 +38,9 @@ meshmaker/                    # Blender addon (install as zip)
 ├── mesh/                     # the MeshMaker tab (image/prompt → 3D)
 └── providers/                # the provider spine
     ├── base.py               #   Provider, GenerateRequest, Asset
-    ├── cloud.py              #   Fal (Hunyuan3D, Pixal3D, Tripo, Rodin) + Meshy
+    ├── common.py             #   ProviderError, data_uri, poll policy
+    ├── fal/                  #   queue transport + Hunyuan3D/Pixal3D/Tripo/Rodin
+    ├── meshy.py              #   MeshyProvider
     └── registry.py           #   the list of active providers
 docs/                         # vision, architecture, reference, cards
 tests/                        # provider mapping + HTTP helper tests
@@ -69,7 +71,7 @@ Open the sidebar (**N** key) and find the **MeshMaker** tab:
 ## Adding a provider
 
 ```python
-# meshmaker/providers/cloud.py
+# meshmaker/providers/my_provider.py  (Fal models go in providers/fal/)
 class MyProvider(Provider):
     id = "MY_PROVIDER"
     name = "My Provider"
