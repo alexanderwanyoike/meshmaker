@@ -1,9 +1,10 @@
 """Provider contracts for MeshMaker Generate backends.
 
 MeshMaker is image-to-3D only. The Blender UI builds a typed ``GenerateRequest``
-and consumes an ``Asset``. Each hosted backend (Fal, Meshy, ...) is one
-``Provider`` subclass in ``cloud.py``. Adding a new Generate provider is a single
-class there plus one line in ``registry.py`` - nothing else changes.
+and consumes an ``Asset``. Each hosted backend is one ``Provider`` subclass in its
+own module (Fal models live in the ``fal/`` subpackage; Meshy in ``meshy.py``).
+Adding a new Generate provider is a single class plus one line in ``registry.py``
+- nothing else changes.
 
 Each provider declares its own ``params`` (a tuple of ``ParamSpec``) - the real
 controls of its API. The Blender UI renders these dynamically, so switching

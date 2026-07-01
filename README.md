@@ -17,12 +17,16 @@ are handled by separate, focused tools.
 
 | Provider | Model | Endpoint | Key |
 |----------|-------|----------|-----|
-| **Fal** | Hunyuan3D 3.1 Pro | `fal-ai/hunyuan-3d/v3.1/pro/image-to-3d` | Fal API key |
+| **Fal** | Hunyuan3D 3.1 | `fal-ai/hunyuan-3d/v3.1/{tier}/image-to-3d` | Fal API key |
+| **Fal** | Pixal3D | `fal-ai/pixal3d` | Fal API key |
+| **Fal** | Tripo v2.5 | `tripo3d/tripo/v2.5/image-to-3d` | Fal API key |
+| **Fal** | Hyper3D Rodin | `fal-ai/hyper3d/rodin` | Fal API key |
 | **Meshy** | Image to 3D (textured) | `api.meshy.ai/openapi/v1/image-to-3d` | Meshy API key |
 
-Both return a hosted GLB URL, which the addon downloads and imports. Adding
-another Generate provider is one class in `meshmaker/providers/cloud.py` plus one
-line in `registry.py`.
+All return a hosted GLB URL, which the addon downloads and imports. The four
+Fal-hosted models share one **Fal API key**. Adding another Fal model is a tiny
+`FalQueueProvider` subclass in its own module under `meshmaker/providers/fal/`
+plus one line in `registry.py`; the queue submit/poll transport is shared.
 
 ## Repo structure
 
@@ -34,7 +38,9 @@ meshmaker/                    # Blender addon (install as zip)
 ├── mesh/                     # the MeshMaker tab (image/prompt → 3D)
 └── providers/                # the provider spine
     ├── base.py               #   Provider, GenerateRequest, Asset
-    ├── cloud.py              #   FalHunyuan3DProvider, MeshyProvider
+    ├── common.py             #   ProviderError, data_uri, poll policy
+    ├── fal/                  #   queue transport + Hunyuan3D/Pixal3D/Tripo/Rodin
+    ├── meshy.py              #   MeshyProvider
     └── registry.py           #   the list of active providers
 docs/                         # vision, architecture, reference, cards
 tests/                        # provider mapping + HTTP helper tests
@@ -56,7 +62,7 @@ tests/                        # provider mapping + HTTP helper tests
 
 Open the sidebar (**N** key) and find the **MeshMaker** tab:
 
-1. Pick a **Provider** (Fal or Meshy).
+1. Pick a **Provider** (Hunyuan3D, Pixal3D, Tripo or Rodin on Fal, or Meshy).
 2. Either type a prompt to generate a concept image with Gemini, or switch to
    **Use File** and point at an image.
 3. Set **Face Count** and **PBR Materials**, then **Generate 3D**. The mesh
@@ -65,7 +71,7 @@ Open the sidebar (**N** key) and find the **MeshMaker** tab:
 ## Adding a provider
 
 ```python
-# meshmaker/providers/cloud.py
+# meshmaker/providers/my_provider.py  (Fal models go in providers/fal/)
 class MyProvider(Provider):
     id = "MY_PROVIDER"
     name = "My Provider"
@@ -81,5 +87,5 @@ provider dropdown automatically.
 
 ## License
 
-MIT - see [LICENSE](LICENSE). The hosted models (Hunyuan3D, Meshy) are governed
-by their providers' terms.
+MIT - see [LICENSE](LICENSE). The hosted models (Hunyuan3D, Pixal3D, Tripo,
+Rodin, Meshy) are governed by their providers' terms.

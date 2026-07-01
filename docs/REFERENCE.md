@@ -1,25 +1,37 @@
 # MeshMaker - Reference
 
-> The Generate (image -> mesh) landscape and the two provider API contracts MeshMaker ships against. Background for `cards/`, not a to-do list. Last refreshed June 2026.
+> The Generate (image -> mesh) landscape and the provider API contracts MeshMaker ships against. Background for `cards/`, not a to-do list. Last refreshed June 2026.
 
 ## Active providers
 
 | Provider | Model | Endpoint | Auth | GLB field |
 |---|---|---|---|---|
-| **Fal** | Hunyuan3D 3.1 Pro | `fal-ai/hunyuan-3d/v3.1/pro/image-to-3d` | `Authorization: Key <key>` | `model_glb.url` |
+| **Fal** | Hunyuan3D 3.1 | `fal-ai/hunyuan-3d/v3.1/{tier}/image-to-3d` | `Authorization: Key <key>` | `model_urls.glb.url` / `model_glb.url` |
+| **Fal** | Pixal3D | `fal-ai/pixal3d` | `Authorization: Key <key>` | `model_glb.url` |
+| **Fal** | Tripo v2.5 | `tripo3d/tripo/v2.5/image-to-3d` | `Authorization: Key <key>` | `model_mesh.url` |
+| **Fal** | Hyper3D Rodin | `fal-ai/hyper3d/rodin` | `Authorization: Key <key>` | `model_mesh.url` |
 | **Meshy** | Image to 3D | `api.meshy.ai/openapi/v1/image-to-3d` | `Authorization: Bearer <key>` | `model_urls.glb` |
 
-Both accept the reference image as a base64 data URI (`data:image/png;base64,...`),
-so no separate image upload is required.
+All accept the reference image as a base64 data URI (`data:image/png;base64,...`),
+so no separate image upload is required. The four Fal models share one Fal API key
+and one queue transport (`FalQueueProvider` in `providers/fal/queue.py`); only the endpoint, payload, and the
+result's GLB field differ (`_fal_glb_url` handles all three output shapes).
 
 ### Fal (queue API)
 
-- **Submit:** `POST https://queue.fal.run/fal-ai/hunyuan-3d/v3.1/pro/image-to-3d`
-  - body: `{ input_image_url, face_count (40k-1.5M, default 500k), enable_pbr, generate_type }`
+All Fal models use the same queue mechanics:
+
+- **Submit:** `POST https://queue.fal.run/{endpoint}`
   - returns: `{ request_id, status_url, response_url, cancel_url }`
 - **Poll:** `GET <status_url>` -> `status` in `IN_QUEUE | IN_PROGRESS | COMPLETED`
-- **Result:** `GET <response_url>` -> `{ model_glb: { url }, model_urls: { glb, obj, fbx, usdz }, thumbnail, seed }`
-- **Cost:** ~$0.375/generation, +$0.15 with PBR. The `rapid` tier (`fal-ai/hunyuan-3d/v3.1/rapid/image-to-3d`) is the cheaper/faster swap.
+- **Result:** `GET <response_url>` -> the model's output JSON (GLB field varies)
+
+Per-model request bodies:
+
+- **Hunyuan3D 3.1** `{ input_image_url, face_count (40k-1.5M), enable_pbr, generate_type }`. `tier` picks `pro` (quality) or `rapid` (fast/cheap). ~$0.375/gen, +$0.15 PBR. Result: `{ model_glb, model_urls: { glb, obj, fbx, usdz }, seed }`.
+- **Pixal3D** `{ image_url, resolution (1024|1536), texture_size (1024|2048|4096), remesh, decimation_target }`. Pixel-aligned, high fidelity. ~$0.30 (1024p) / $0.42 (1536p). Result: `{ model_glb, seed }`.
+- **Tripo v2.5** `{ image_url, texture (no|standard|HD), pbr, quad, face_limit }`. Fast, strong geometry. Result: `{ task_id, model_mesh, pbr_model, base_model }`.
+- **Rodin** `{ input_image_urls[], geometry_file_format, quality (high|medium|low|extra-low), material (PBR|Shaded), tier (Regular|Sketch), hyper_mode }`. Premium quality. ~$0.40/gen, HighPack 3x. Result: `{ model_mesh, textures[] }`.
 
 ### Meshy (OpenAPI)
 
@@ -36,12 +48,19 @@ If another Generate provider is ever added, these are the candidates worth knowi
 
 | Model | Origin | License | Notes |
 |---|---|---|---|
-| **Hunyuan3D 3.1** (active, via Fal) | Tencent | Commercial API | Current default. Strong geometry + PBR, hosted |
+| **Hunyuan3D 3.1** (active, via Fal) | Tencent | Commercial API | Default. Strong geometry + PBR, hosted |
+| **Pixal3D** (active, via Fal) | TencentARC | Commercial API | Pixel-aligned, high-fidelity texture. Fal-only |
+| **Tripo v2.5** (active, via Fal) | VAST-AI | Commercial API | Fast, strong geometry; PBR/quad/HD texture |
+| **Hyper3D Rodin** (active, via Fal) | Deemos | Commercial API | Premium quality; quality tiers, hyper mode |
 | **Meshy-5/6** (active) | Meshy | Commercial API | Textured, fast, good all-rounder |
-| **Tripo / Prism 3.0** | VAST-AI | Commercial API | Closest Meshy competitor; has a Blender plugin |
 | **Trellis 2** | Microsoft | MIT | Strong geometry, darker textures. Self-host only |
 | **Hunyuan3D 2.1** | Tencent | Permissive | Good PBR. Self-host only |
 | **TripoSG / TripoSR** | VAST-AI | MIT | Shape-only (SG) or very fast previews (SR) |
+
+Tripo and Rodin also have native APIs (platform.tripo3d.ai, Deemos) with newer
+model versions (Tripo v3.1/P1, Rodin Gen-2). MeshMaker routes both through Fal to
+reuse one key and one transport; a native client is only worth adding if a Fal-lagged
+model version becomes a hard requirement.
 
 **Takeaway:** prefer hosted APIs that return a GLB URL. Self-hosted models
 (Trellis, Hunyuan 2.1) are only worth it if a hosted option fails the quality or
